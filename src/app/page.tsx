@@ -39,6 +39,8 @@ export default function Home() {
   const [maskedRrn, setMaskedRrn] = useState<string | null>(null);
   const [metric, setMetric] = useState<Metric>("height");
   const [percentiles, setPercentiles] = useState({ height: 50, weight: 55 });
+  const [saveStatus, setSaveStatus] = useState<string>("");
+  const [loadStatus, setLoadStatus] = useState<string>("");
 
   const ageMonths = useMemo(
     () => getAgeMonths(childInfo.birthDate, childInfo.measurementDate),
@@ -152,6 +154,69 @@ export default function Home() {
     }
   };
 
+  const handleSave = async () => {
+    setSaveStatus("Supabase에 저장 중...");
+    try {
+      const response = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chartNumber: childInfo.chartNumber,
+          name: childInfo.name,
+          birthDate: childInfo.birthDate,
+          sex: childInfo.sex,
+          measurementDate: childInfo.measurementDate,
+          heightCm: childInfo.heightCm,
+          weightKg: childInfo.weightKg,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setSaveStatus(result.error ?? "저장에 실패했어요.");
+        return;
+      }
+      setSaveStatus("저장 완료! (RRN은 저장하지 않았어요)");
+    } catch (error) {
+      setSaveStatus("저장 중 오류가 발생했어요.");
+    }
+  };
+
+  const handleLoad = async () => {
+    if (!childInfo.chartNumber) {
+      setLoadStatus("차트번호를 입력해주세요.");
+      return;
+    }
+    setLoadStatus("최근 기록을 불러오는 중...");
+    try {
+      const response = await fetch(
+        `/api/patients?chartNumber=${encodeURIComponent(childInfo.chartNumber)}`
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        setLoadStatus(result.error ?? "불러오기에 실패했어요.");
+        return;
+      }
+      setChildInfo((prev) => ({
+        ...prev,
+        chartNumber: result.patient.chartNumber,
+        name: result.patient.name,
+        birthDate: result.patient.birthDate,
+        sex: result.patient.sex,
+        measurementDate: result.measurement?.measurementDate ?? prev.measurementDate,
+        heightCm:
+          result.measurement?.heightCm?.toString() ?? prev.heightCm,
+        weightKg:
+          result.measurement?.weightKg?.toString() ?? prev.weightKg,
+        rrn: "",
+      }));
+      setMaskedRrn(null);
+      setRrnError(null);
+      setLoadStatus("최근 기록을 불러왔어요.");
+    } catch (error) {
+      setLoadStatus("불러오기 중 오류가 발생했어요.");
+    }
+  };
+
   const sharePayload = {
     chartNumber: childInfo.chartNumber,
     name: childInfo.name,
@@ -218,6 +283,20 @@ export default function Home() {
               percentile={activePercentile}
               onChange={handlePercentileChange}
             />
+
+            <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handleSave}>Supabase 저장</Button>
+                <Button variant="outline" onClick={handleLoad}>
+                  최근 기록 불러오기
+                </Button>
+              </div>
+              {saveStatus && <p className="text-xs text-[#64748b]">{saveStatus}</p>}
+              {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
+              <p className="text-[11px] text-[#94a3b8]">
+                주민등록번호는 Supabase에 저장되지 않습니다.
+              </p>
+            </div>
 
             <ShareButton reportRef={reportRef} payload={sharePayload} />
           </div>
