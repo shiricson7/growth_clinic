@@ -1,0 +1,50 @@
+[
+  {
+    "id": "v1",
+    "patientId": "p1",
+    "date": "2024-01-15",
+    "ageMonth": 0,
+    "heightCm": 50,
+    "weightKg": 3.2
+  },
+  {
+    "id": "v2",
+    "patientId": "p1",
+    "date": "2024-07-15",
+    "ageMonth": 6,
+    "heightCm": 68,
+    "weightKg": 8.1
+  },
+  {
+    "id": "v3",
+    "patientId": "p1",
+    "date": "2025-01-15",
+    "ageMonth": 12,
+    "heightCm": 76,
+    "weightKg": 10.5
+  },
+  {
+    "id": "v4",
+    "patientId": "p1",
+    "date": "2025-07-15",
+    "ageMonth": 18,
+    "heightCm": 82.5,
+    "weightKg": 11.8
+  },
+  {
+    "id": "v5",
+    "patientId": "p1",
+    "date": "2026-01-15",
+    "ageMonth": 24,
+    "heightCm": 87.5,
+    "weightKg": 12.5
+  },
+  {
+    "id": "v1769256389379",
+    "patientId": "p1",
+    "date": "2026-02-15",
+    "ageMonth": 25,
+    "heightCm": 90.5,
+    "weightKg": 13
+  }
+]
