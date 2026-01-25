@@ -62,7 +62,7 @@ export function useGrowthAnalytics() {
             return currDiff < prevDiff ? curr : prev;
         }, visits[0] === currentVisit && visits.length > 1 ? visits[1] : visits[0]);
 
-        let trendSummary = TREND_SUMMARY.insufficient[audience];
+        let trendSummary: string = TREND_SUMMARY.insufficient[audience];
 
         if (pastVisit && pastVisit.id !== currentVisit.id) {
             const pastStd = getStandard(sex, pastVisit.ageMonth);
