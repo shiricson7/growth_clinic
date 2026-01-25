@@ -20,6 +20,14 @@ interface ChildInfoFormProps {
   data: ChildInfo;
   rrnError?: string | null;
   maskedRrn?: string | null;
+  chartSuggestions?: Array<{
+    chartNumber: string;
+    name: string;
+    birthDate: string;
+    sex: "male" | "female";
+  }>;
+  isSearching?: boolean;
+  onChartSelect?: (chartNumber: string) => void;
   onFieldChange: (field: keyof ChildInfo, value: string) => void;
   onRrnChange: (value: string) => void;
 }
@@ -28,6 +36,9 @@ export default function ChildInfoForm({
   data,
   rrnError,
   maskedRrn,
+  chartSuggestions = [],
+  isSearching = false,
+  onChartSelect,
   onFieldChange,
   onRrnChange,
 }: ChildInfoFormProps) {
@@ -41,14 +52,46 @@ export default function ChildInfoForm({
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
+          <div className="relative space-y-2">
             <Label htmlFor="chartNumber">차트번호</Label>
             <Input
               id="chartNumber"
               value={data.chartNumber}
               onChange={(e) => onFieldChange("chartNumber", e.target.value)}
               placeholder="예: A-2026-001"
+              autoComplete="off"
             />
+            {(isSearching || chartSuggestions.length > 0) && (
+              <div className="absolute left-0 right-0 top-[72px] z-20 rounded-2xl border border-white/70 bg-white/90 p-2 text-sm shadow-lg backdrop-blur-xl">
+                {isSearching && (
+                  <p className="px-3 py-2 text-xs text-[#94a3b8]">검색 중...</p>
+                )}
+                {!isSearching && chartSuggestions.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-[#94a3b8]">검색 결과가 없습니다.</p>
+                )}
+                <ul className="space-y-1">
+                  {chartSuggestions.map((item) => (
+                    <li key={item.chartNumber}>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-white"
+                        onClick={() => onChartSelect?.(item.chartNumber)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-[#1a1c24]">{item.chartNumber}</span>
+                          <span className="text-xs text-[#94a3b8]">
+                            {item.sex === "male" ? "남아" : "여아"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#64748b]">
+                          {item.name} · {item.birthDate}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="name">이름</Label>

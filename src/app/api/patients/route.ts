@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { createSupabaseServer } from "@/lib/supabase/server";
 
 type Sex = "male" | "female";
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createSupabaseAdmin();
+    const supabase = createSupabaseServer();
     const { data: patient, error: patientError } = await supabase
       .from("patients")
       .upsert(
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "chartNumber가 필요합니다." }, { status: 400 });
   }
 
-  const supabase = createSupabaseAdmin();
+  const supabase = createSupabaseServer();
   const { data: patient, error: patientError } = await supabase
     .from("patients")
     .select("id, chart_number, name, birth_date, sex")

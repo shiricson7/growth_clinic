@@ -8,22 +8,22 @@ function getEnv(name: string) {
   return value;
 }
 
-export function createSupabaseAdmin() {
+export function createSupabaseServer() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const serviceRole =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SECRET_KEY ??
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
     "";
 
   if (!url) {
     getEnv("NEXT_PUBLIC_SUPABASE_URL");
   }
-  if (!serviceRole) {
-    getEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (!anonKey) {
+    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
-  return createClient(url, serviceRole, {
+  return createClient(url, anonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
