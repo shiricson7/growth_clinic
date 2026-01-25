@@ -16,6 +16,29 @@ const metricTitle: Record<Metric, string> = {
   weight: "몸무게 성장 곡선",
 };
 
+const formatAgeLabel = (rawMonths: number) => {
+  const months = Math.round(rawMonths);
+  if (months >= 60) {
+    const years = Math.floor(months / 12);
+    const remainder = months % 12;
+    return remainder === 0 ? `${years}세` : `${years}세 ${remainder}개월`;
+  }
+  return `${months}개월`;
+};
+
+const buildAgeTicks = (maxAge: number) => {
+  const step = 6;
+  const end = Math.max(0, Math.round(maxAge));
+  const ticks: number[] = [];
+  for (let m = 0; m <= end; m += step) {
+    ticks.push(m);
+  }
+  if (ticks[ticks.length - 1] !== end) {
+    ticks.push(end);
+  }
+  return ticks;
+};
+
 interface GrowthChartProps {
   metric: Metric;
   chartData: ChartPoint[];
@@ -23,6 +46,9 @@ interface GrowthChartProps {
 }
 
 export default function GrowthChart({ metric, chartData, currentAgeMonths }: GrowthChartProps) {
+  const maxAge = chartData.length ? chartData[chartData.length - 1].ageMonths : 0;
+  const ageTicks = buildAgeTicks(maxAge);
+
   return (
     <div className="h-full w-full rounded-2xl border border-white/60 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between">
@@ -49,7 +75,11 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
               tick={{ fontSize: 11, fill: "#94a3b8" }}
               tickLine={false}
               axisLine={false}
-              interval={5}
+              ticks={ageTicks}
+              interval={0}
+              minTickGap={14}
+              tickMargin={8}
+              tickFormatter={formatAgeLabel}
             />
             <YAxis hide domain={["dataMin - 3", "dataMax + 3"]} />
 
@@ -61,7 +91,7 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
                 const value = point.patient ?? point.predicted;
                 return (
                   <div className="rounded-lg bg-[#1a1c24] px-3 py-2 text-xs text-white shadow-lg">
-                    {point.ageMonths}개월 · {value ? `${value}` : "데이터 없음"}
+                    {formatAgeLabel(point.ageMonths)} · {value ? `${value}` : "데이터 없음"}
                   </div>
                 );
               }}

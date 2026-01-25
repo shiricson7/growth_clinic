@@ -26,6 +26,28 @@ export function isValidRrn(rrnDigits: string): boolean {
   return /^\d{13}$/.test(rrnDigits);
 }
 
+export function deriveRrnInfo(
+  rrnDigits: string
+): { birthDate: string | null; sex: Sex | null } {
+  if (!/^\d{6,}$/.test(rrnDigits)) {
+    return { birthDate: null, sex: null };
+  }
+  const yy = Number(rrnDigits.slice(0, 2));
+  const mm = Number(rrnDigits.slice(2, 4));
+  const dd = Number(rrnDigits.slice(4, 6));
+  const code = rrnDigits.length >= 7 ? Number(rrnDigits[6]) : Number.NaN;
+  const year = inferCentury(code, yy);
+  const safeDate = toValidDateParts(year, mm, dd);
+  const birthDate = `${safeDate.year.toString().padStart(4, "0")}-${safeDate.month
+    .toString()
+    .padStart(2, "0")}-${safeDate.day.toString().padStart(2, "0")}`;
+
+  return {
+    birthDate,
+    sex: rrnDigits.length >= 7 ? inferSex(code) : null,
+  };
+}
+
 export function parseRrn(rrnDigits: string): { birthDate: string; sex: Sex } {
   if (!isValidRrn(rrnDigits)) {
     throw new Error("Invalid RRN");

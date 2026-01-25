@@ -14,6 +14,29 @@ import { GrowthStandard } from '@/lib/data/standards';
 import { Visit } from '@/lib/data/mockData';
 import { Audience, UI_COPY } from '@/lib/copy/uiCopy';
 
+const formatAgeLabel = (rawMonths: number) => {
+    const months = Math.round(rawMonths);
+    if (months >= 60) {
+        const years = Math.floor(months / 12);
+        const remainder = months % 12;
+        return remainder === 0 ? `${years}세` : `${years}세 ${remainder}개월`;
+    }
+    return `${months}개월`;
+};
+
+const buildAgeTicks = (maxAge: number) => {
+    const step = 6;
+    const end = Math.max(0, Math.round(maxAge));
+    const ticks: number[] = [];
+    for (let m = 0; m <= end; m += step) {
+        ticks.push(m);
+    }
+    if (ticks[ticks.length - 1] !== end) {
+        ticks.push(end);
+    }
+    return ticks;
+};
+
 interface GrowthChartProps {
     standards: GrowthStandard[];
     visits: Visit[];
@@ -25,6 +48,8 @@ interface GrowthChartProps {
 
 export function GrowthChart({ standards, visits, latestHeight, latestPercentile, latestAgeMonth, audience }: GrowthChartProps) {
     const copy = UI_COPY.growthChart;
+    const maxAge = standards.length ? standards[standards.length - 1].age_month : 0;
+    const ageTicks = buildAgeTicks(maxAge);
     const chartData = useMemo(() => {
         return standards.map((std) => {
             // Find visit for this month (approx) to plot the dots
@@ -56,7 +81,7 @@ export function GrowthChart({ standards, visits, latestHeight, latestPercentile,
                 <div className="flex gap-4">
                     <div className="text-right">
                         <p className="text-xs text-gray-400 font-medium uppercase">{copy.ageLabel[audience]}</p>
-                        <p className="text-sm font-bold text-primary">{latestAgeMonth}개월</p>
+                        <p className="text-sm font-bold text-primary">{formatAgeLabel(latestAgeMonth)}</p>
                     </div>
                     <div className="w-px h-8 bg-gray-200"></div>
                     <div className="text-right">
@@ -89,8 +114,11 @@ export function GrowthChart({ standards, visits, latestHeight, latestPercentile,
                             tick={{ fontSize: 12, fill: '#9ca3af' }}
                             tickLine={false}
                             axisLine={false}
-                            interval={5} // Show every 6 months roughly (0, 6, 12...)
+                            ticks={ageTicks}
+                            interval={0}
+                            minTickGap={14}
                             padding={{ left: 20, right: 20 }}
+                            tickFormatter={formatAgeLabel}
                         />
 
                         <Tooltip
@@ -101,7 +129,7 @@ export function GrowthChart({ standards, visits, latestHeight, latestPercentile,
                                     // Custom Tooltip styling matching the design's floating badge
                                     return (
                                         <div className="bg-[#170c1c] text-white text-xs py-1.5 px-3 rounded-lg shadow-xl whitespace-nowrap z-10 relative">
-                                            {label}개월: {pHeight ? `${pHeight}cm` : '데이터 없음'}
+                                            {formatAgeLabel(Number(label))}: {pHeight ? `${pHeight}cm` : '데이터 없음'}
                                             {/* Triangle arrow at bottom */}
                                             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#170c1c] rotate-45"></div>
                                         </div>

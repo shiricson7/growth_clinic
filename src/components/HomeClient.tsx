@@ -7,7 +7,7 @@ import PercentileSlider from "@/components/PercentileSlider";
 import ReportCard from "@/components/ReportCard";
 import ShareButton from "@/components/ShareButton";
 import { Button } from "@/components/ui/button";
-import { normalizeRrn, isValidRrn, parseRrn } from "@/lib/rrn";
+import { deriveRrnInfo, normalizeRrn } from "@/lib/rrn";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import {
@@ -202,22 +202,26 @@ export default function HomeClient() {
   const handleRrnChange = (value: string) => {
     setChildInfo((prev) => ({ ...prev, rrn: value }));
     const digits = normalizeRrn(value);
+    if (digits.length < 6) {
+      setChildInfo((prev) => ({ ...prev, birthDate: "", sex: "" }));
+      setRrnError(null);
+      setMaskedRrn(null);
+      return;
+    }
+
+    const info = deriveRrnInfo(digits);
+    setChildInfo((prev) => ({
+      ...prev,
+      birthDate: info.birthDate ?? prev.birthDate,
+      sex: info.sex ?? "",
+    }));
+
     if (digits.length < 13) {
       setRrnError(null);
       setMaskedRrn(null);
       return;
     }
-    if (!isValidRrn(digits)) {
-      setRrnError("유효한 주민등록번호가 아닙니다.");
-      setMaskedRrn(null);
-      return;
-    }
-    const parsed = parseRrn(digits);
-    setChildInfo((prev) => ({
-      ...prev,
-      birthDate: parsed.birthDate,
-      sex: parsed.sex,
-    }));
+
     setMaskedRrn(`${digits.slice(0, 6)}-*******`);
     setRrnError(null);
   };
@@ -238,7 +242,7 @@ export default function HomeClient() {
       setSaveStatus("로그인 후 저장할 수 있어요.");
       return;
     }
-    setSaveStatus("Supabase에 저장 중...");
+    setSaveStatus("저장 중...");
     try {
       const { data: patient, error: patientError } = await supabase
         .from("patients")
@@ -519,7 +523,7 @@ export default function HomeClient() {
 
                 <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
                   <div className="flex flex-wrap gap-3">
-                    <Button onClick={handleSave}>Supabase 저장</Button>
+                    <Button onClick={handleSave}>저장</Button>
                     <Button variant="outline" onClick={() => loadPatientByChartNumber(childInfo.chartNumber)}>
                       최근 기록 불러오기
                     </Button>
