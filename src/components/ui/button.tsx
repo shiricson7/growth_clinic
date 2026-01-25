@@ -10,10 +10,10 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClasses: Record<NonNullable<ButtonProps["variant"]>, string> = {
   default:
-    "bg-primary text-white shadow-sm hover:bg-primary/90 focus-visible:ring-primary/40",
+    "bg-[#1a1c24] text-white shadow-sm hover:bg-[#0f1117] focus-visible:ring-[#1a1c24]/30",
   outline:
-    "border border-white/60 bg-white/40 text-[#1a1c24] hover:bg-white/70",
-  ghost: "bg-transparent text-[#3b3f4c] hover:bg-white/40",
+    "border border-[#cbd5f5] bg-white/70 text-[#1a1c24] hover:bg-white",
+  ghost: "bg-transparent text-[#1a1c24] hover:bg-white/60",
 };
 
 const sizeClasses: Record<NonNullable<ButtonProps["size"]>, string> = {

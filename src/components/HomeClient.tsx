@@ -527,7 +527,7 @@ export default function HomeClient() {
                   {saveStatus && <p className="text-xs text-[#64748b]">{saveStatus}</p>}
                   {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
                   <p className="text-[11px] text-[#94a3b8]">
-                    주민등록번호는 Supabase에 저장되지 않습니다.
+                    주민등록번호는 저장되지 않습니다.
                   </p>
                 </div>
 

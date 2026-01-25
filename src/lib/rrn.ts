@@ -1,48 +1,29 @@
 type Sex = "male" | "female";
 
-const WEIGHTS = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5] as const;
-
 export function normalizeRrn(input: string): string {
-  return input.replace(/\D/g, "");
+  return input.replace(/\D/g, "").slice(0, 13);
 }
 
-function getCenturyAndSex(code: number): { century: number; sex: Sex } | null {
-  if (code === 1 || code === 2) return { century: 1900, sex: code === 1 ? "male" : "female" };
-  if (code === 3 || code === 4) return { century: 2000, sex: code === 3 ? "male" : "female" };
-  if (code === 5 || code === 6) return { century: 1900, sex: code === 5 ? "male" : "female" };
-  if (code === 7 || code === 8) return { century: 2000, sex: code === 7 ? "male" : "female" };
-  return null;
+function inferCentury(code: number, yy: number): number {
+  if (code === 1 || code === 2 || code === 5 || code === 6) return 1900;
+  if (code === 3 || code === 4 || code === 7 || code === 8) return 2000;
+  const currentYear = new Date().getFullYear() % 100;
+  return yy <= currentYear ? 2000 : 1900;
 }
 
-function isValidDate(year: number, month: number, day: number): boolean {
-  const date = new Date(year, month - 1, day);
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day
-  );
+function inferSex(code: number): Sex {
+  return code % 2 === 1 ? "male" : "female";
+}
+
+function toValidDateParts(year: number, month: number, day: number) {
+  const safeMonth = Number.isFinite(month) ? Math.min(12, Math.max(1, month)) : 1;
+  const lastDay = new Date(year, safeMonth, 0).getDate();
+  const safeDay = Number.isFinite(day) ? Math.min(lastDay, Math.max(1, day)) : 1;
+  return { year, month: safeMonth, day: safeDay };
 }
 
 export function isValidRrn(rrnDigits: string): boolean {
-  if (!/^\d{13}$/.test(rrnDigits)) return false;
-  const code = Number(rrnDigits[6]);
-  const info = getCenturyAndSex(code);
-  if (!info) return false;
-
-  const yy = Number(rrnDigits.slice(0, 2));
-  const mm = Number(rrnDigits.slice(2, 4));
-  const dd = Number(rrnDigits.slice(4, 6));
-  const year = info.century + yy;
-
-  if (!isValidDate(year, mm, dd)) return false;
-
-  const digits = rrnDigits.split("").map((d) => Number(d));
-  let sum = 0;
-  for (let i = 0; i < 12; i += 1) {
-    sum += digits[i] * WEIGHTS[i];
-  }
-  const check = (11 - (sum % 11)) % 10;
-  return check === digits[12];
+  return /^\d{13}$/.test(rrnDigits);
 }
 
 export function parseRrn(rrnDigits: string): { birthDate: string; sex: Sex } {
@@ -50,18 +31,15 @@ export function parseRrn(rrnDigits: string): { birthDate: string; sex: Sex } {
     throw new Error("Invalid RRN");
   }
   const code = Number(rrnDigits[6]);
-  const info = getCenturyAndSex(code);
-  if (!info) {
-    throw new Error("Invalid RRN");
-  }
   const yy = Number(rrnDigits.slice(0, 2));
   const mm = Number(rrnDigits.slice(2, 4));
   const dd = Number(rrnDigits.slice(4, 6));
-  const year = info.century + yy;
+  const year = inferCentury(code, yy);
+  const safeDate = toValidDateParts(year, mm, dd);
 
-  const birthDate = `${year.toString().padStart(4, "0")}-${mm
+  const birthDate = `${safeDate.year.toString().padStart(4, "0")}-${safeDate.month
     .toString()
-    .padStart(2, "0")}-${dd.toString().padStart(2, "0")}`;
+    .padStart(2, "0")}-${safeDate.day.toString().padStart(2, "0")}`;
 
-  return { birthDate, sex: info.sex };
+  return { birthDate, sex: inferSex(code) };
 }
