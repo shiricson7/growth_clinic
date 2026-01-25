@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 const today = new Date().toISOString().slice(0, 10);
 
 const defaultChildInfo: ChildInfo = {
-  chartNumber: "A-2026-001",
+  chartNumber: "12345",
   name: "서윤",
   rrn: "",
   birthDate: "",
@@ -46,6 +46,7 @@ export default function HomeClient() {
   const [authMessage, setAuthMessage] = useState<string>("");
 
   const [childInfo, setChildInfo] = useState<ChildInfo>(defaultChildInfo);
+  const [isPristine, setIsPristine] = useState(true);
   const [rrnError, setRrnError] = useState<string | null>(null);
   const [maskedRrn, setMaskedRrn] = useState<string | null>(null);
   const [metric, setMetric] = useState<Metric>("height");
@@ -94,9 +95,62 @@ export default function HomeClient() {
   const activePercentile = metric === "height" ? percentiles.height : percentiles.weight;
   const currentValue = metric === "height" ? heightValue : weightValue;
 
+  const chartHistory = useMemo(() => {
+    if (!childInfo.birthDate) return [];
+    return history
+      .map((item) => {
+        const value = metric === "height" ? item.heightCm : item.weightKg;
+        if (value === null || value === undefined) return null;
+        const age = getAgeMonths(childInfo.birthDate, item.measurementDate);
+        return { ageMonths: age, value };
+      })
+      .filter((item): item is { ageMonths: number; value: number } => Boolean(item))
+      .sort((a, b) => a.ageMonths - b.ageMonths);
+  }, [history, childInfo.birthDate, metric]);
+
+  const opinionMeasurements = useMemo(() => {
+    const entries = new Map<
+      string,
+      { measurementDate: string; heightCm: number | null; weightKg: number | null }
+    >();
+    history.forEach((item) => {
+      if (!item.measurementDate) return;
+      entries.set(item.measurementDate, {
+        measurementDate: item.measurementDate,
+        heightCm: item.heightCm,
+        weightKg: item.weightKg,
+      });
+    });
+
+    if (childInfo.measurementDate) {
+      const heightValue = childInfo.heightCm ? Number(childInfo.heightCm) : null;
+      const weightValue = childInfo.weightKg ? Number(childInfo.weightKg) : null;
+      if (heightValue !== null || weightValue !== null) {
+        entries.set(childInfo.measurementDate, {
+          measurementDate: childInfo.measurementDate,
+          heightCm: heightValue,
+          weightKg: weightValue,
+        });
+      }
+    }
+
+    return Array.from(entries.values()).sort((a, b) =>
+      a.measurementDate < b.measurementDate ? -1 : 1
+    );
+  }, [history, childInfo.measurementDate, childInfo.heightCm, childInfo.weightKg]);
+
+  const opinionInput = useMemo(
+    () => ({
+      birthDate: childInfo.birthDate,
+      sex: childInfo.sex,
+      measurements: opinionMeasurements,
+    }),
+    [childInfo.birthDate, childInfo.sex, opinionMeasurements]
+  );
+
   const { chartData } = useMemo(
-    () => buildChartData(metric, effectiveAge, activePercentile, currentValue),
-    [metric, effectiveAge, activePercentile, currentValue]
+    () => buildChartData(metric, effectiveAge, activePercentile, currentValue, chartHistory),
+    [metric, effectiveAge, activePercentile, currentValue, chartHistory]
   );
 
   useEffect(() => {
@@ -119,6 +173,7 @@ export default function HomeClient() {
     if (!token) return;
     if (!supabase) return;
     const load = async () => {
+      setIsPristine(false);
       const stored = window.localStorage.getItem("growth-report-share");
       if (!stored) return;
       const data = JSON.parse(stored);
@@ -147,7 +202,7 @@ export default function HomeClient() {
   }, [searchParams, supabase]);
 
   useEffect(() => {
-    if (!session || !supabase) return;
+    if (!session || !supabase || isPristine) return;
     const query = childInfo.chartNumber.trim();
     if (query.length < 2) {
       setChartSuggestions([]);
@@ -181,10 +236,14 @@ export default function HomeClient() {
     }, 300);
 
     return () => clearTimeout(handle);
-  }, [childInfo.chartNumber, session, supabase]);
+  }, [childInfo.chartNumber, session, supabase, isPristine]);
 
   const handleFieldChange = (field: keyof ChildInfo, value: string) => {
+    setIsPristine(false);
     setChildInfo((prev) => ({ ...prev, [field]: value }));
+    if (field === "chartNumber") {
+      setHistory([]);
+    }
     if (field === "heightCm" && value) {
       setPercentiles((prev) => ({
         ...prev,
@@ -200,6 +259,7 @@ export default function HomeClient() {
   };
 
   const handleRrnChange = (value: string) => {
+    setIsPristine(false);
     setChildInfo((prev) => ({ ...prev, rrn: value }));
     const digits = normalizeRrn(value);
     if (digits.length < 6) {
@@ -277,6 +337,18 @@ export default function HomeClient() {
         return;
       }
 
+      setHistory((prev) => {
+        const entry = {
+          measurementDate: childInfo.measurementDate,
+          heightCm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
+          weightKg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
+        };
+        const filtered = prev.filter((item) => item.measurementDate !== entry.measurementDate);
+        return [entry, ...filtered]
+          .sort((a, b) => (a.measurementDate < b.measurementDate ? 1 : -1))
+          .slice(0, 6);
+      });
+
       setSaveStatus("저장 완료! (RRN은 저장하지 않았어요)");
     } catch (error) {
       setSaveStatus("저장 중 오류가 발생했어요.");
@@ -317,6 +389,7 @@ export default function HomeClient() {
     }
 
     const latest = measurements?.[0];
+    setIsPristine(false);
     setChildInfo((prev) => ({
       ...prev,
       chartNumber: patient.chart_number,
@@ -471,6 +544,7 @@ export default function HomeClient() {
                   setChartSuggestions([]);
                   setHistory([]);
                   setChildInfo(defaultChildInfo);
+                  setIsPristine(true);
                 }}
               >
                 로그아웃
@@ -483,6 +557,7 @@ export default function HomeClient() {
                   data={childInfo}
                   rrnError={rrnError}
                   maskedRrn={maskedRrn}
+                  isPristine={isPristine}
                   onFieldChange={handleFieldChange}
                   onRrnChange={handleRrnChange}
                   chartSuggestions={chartSuggestions}
@@ -575,6 +650,7 @@ export default function HomeClient() {
                 chartData={chartData}
                 percentile={activePercentile}
                 ageMonths={effectiveAge}
+                opinionInput={opinionInput}
               />
             </section>
           </>

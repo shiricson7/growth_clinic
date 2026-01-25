@@ -16,6 +16,11 @@ export type ChartPoint = {
   predicted?: number;
 };
 
+export type PatientPoint = {
+  ageMonths: number;
+  value: number;
+};
+
 const MAX_REFERENCE_MONTHS = 60;
 
 const referenceCache: Record<Metric, GrowthPoint[]> = {
@@ -165,18 +170,17 @@ export function buildChartData(
   metric: Metric,
   ageMonths: number,
   percentile: number,
-  currentValue: number
+  _currentValue: number,
+  patientHistory: PatientPoint[] = []
 ) {
   const maxAge = Math.max(MAX_REFERENCE_MONTHS, Math.ceil(ageMonths + 12));
   const reference = Array.from({ length: maxAge + 1 }, (_, idx) =>
     getReferenceAtAge(metric, idx)
   );
-  const history = getHistory(metric, ageMonths, percentile);
   const predictions = getPredictions(metric, ageMonths, percentile);
 
   const patientMap = new Map<number, number>();
-  history.forEach((item) => patientMap.set(Math.round(item.ageMonths), item.value));
-  patientMap.set(Math.round(ageMonths), currentValue);
+  patientHistory.forEach((item) => patientMap.set(Math.round(item.ageMonths), item.value));
 
   const predictedMap = new Map<number, number>();
   predictions.forEach((item) =>
@@ -192,5 +196,5 @@ export function buildChartData(
     predicted: predictedMap.get(point.ageMonths),
   }));
 
-  return { chartData, history, predictions };
+  return { chartData, history: patientHistory, predictions };
 }

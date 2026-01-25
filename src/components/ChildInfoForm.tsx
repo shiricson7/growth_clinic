@@ -20,6 +20,7 @@ interface ChildInfoFormProps {
   data: ChildInfo;
   rrnError?: string | null;
   maskedRrn?: string | null;
+  isPristine?: boolean;
   chartSuggestions?: Array<{
     chartNumber: string;
     name: string;
@@ -36,12 +37,15 @@ export default function ChildInfoForm({
   data,
   rrnError,
   maskedRrn,
+  isPristine = false,
   chartSuggestions = [],
   isSearching = false,
   onChartSelect,
   onFieldChange,
   onRrnChange,
 }: ChildInfoFormProps) {
+  const inputTone = isPristine ? "text-[#94a3b8]" : "";
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -58,8 +62,9 @@ export default function ChildInfoForm({
               id="chartNumber"
               value={data.chartNumber}
               onChange={(e) => onFieldChange("chartNumber", e.target.value)}
-              placeholder="예: A-2026-001"
+              placeholder="예: 12345"
               autoComplete="off"
+              className={inputTone}
             />
             {(isSearching || chartSuggestions.length > 0) && (
               <div className="absolute left-0 right-0 top-[72px] z-20 rounded-2xl border border-white/70 bg-white/90 p-2 text-sm shadow-lg backdrop-blur-xl">
@@ -100,6 +105,7 @@ export default function ChildInfoForm({
               value={data.name}
               onChange={(e) => onFieldChange("name", e.target.value)}
               placeholder="예: 서윤"
+              className={inputTone}
             />
           </div>
         </div>
@@ -112,6 +118,7 @@ export default function ChildInfoForm({
             onChange={(e) => onRrnChange(e.target.value)}
             placeholder="13자리 (예: 230101-1234567)"
             inputMode="numeric"
+            className={inputTone}
           />
           {maskedRrn && !rrnError && (
             <p className="text-xs text-[#64748b]">확인됨: {maskedRrn}</p>
@@ -134,7 +141,7 @@ export default function ChildInfoForm({
                 value={data.birthDate}
                 readOnly
                 placeholder="YYYY-MM-DD"
-                className="pr-10"
+                className={["pr-10", inputTone].filter(Boolean).join(" ")}
               />
               <Lock className="absolute right-3 top-3.5 h-4 w-4 text-[#94a3b8]" />
             </div>
@@ -147,7 +154,7 @@ export default function ChildInfoForm({
                 value={data.sex === "male" ? "남아" : data.sex === "female" ? "여아" : ""}
                 readOnly
                 placeholder="자동 입력"
-                className="pr-10"
+                className={["pr-10", inputTone].filter(Boolean).join(" ")}
               />
               <Lock className="absolute right-3 top-3.5 h-4 w-4 text-[#94a3b8]" />
             </div>
@@ -162,6 +169,7 @@ export default function ChildInfoForm({
               type="date"
               value={data.measurementDate}
               onChange={(e) => onFieldChange("measurementDate", e.target.value)}
+              className={inputTone}
             />
           </div>
           <div className="space-y-2">
@@ -173,6 +181,7 @@ export default function ChildInfoForm({
               value={data.heightCm}
               onChange={(e) => onFieldChange("heightCm", e.target.value)}
               placeholder="예: 88.3"
+              className={inputTone}
             />
           </div>
           <div className="space-y-2">
@@ -184,6 +193,7 @@ export default function ChildInfoForm({
               value={data.weightKg}
               onChange={(e) => onFieldChange("weightKg", e.target.value)}
               placeholder="예: 12.4"
+              className={inputTone}
             />
           </div>
         </div>

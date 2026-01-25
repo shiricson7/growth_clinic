@@ -17,7 +17,15 @@ interface ReportCardProps {
   chartData: ChartPoint[];
   percentile: number;
   ageMonths: number;
-  prevPercentile?: number;
+  opinionInput: {
+    birthDate: string;
+    sex: "male" | "female" | "";
+    measurements: Array<{
+      measurementDate: string;
+      heightCm: number | null;
+      weightKg: number | null;
+    }>;
+  };
 }
 
 const ReportCard = React.forwardRef<HTMLDivElement, ReportCardProps>(
@@ -33,7 +41,7 @@ const ReportCard = React.forwardRef<HTMLDivElement, ReportCardProps>(
       chartData,
       percentile,
       ageMonths,
-      prevPercentile,
+      opinionInput,
     },
     ref
   ) => {
@@ -87,11 +95,7 @@ const ReportCard = React.forwardRef<HTMLDivElement, ReportCardProps>(
                 </p>
               </div>
               <HedgehogBubble
-                metric={metric}
-                currentPercentile={percentile}
-                prevPercentile={prevPercentile}
-                deltaMonths={3}
-                ageMonths={ageMonths}
+                opinionInput={opinionInput}
               />
             </div>
           </div>

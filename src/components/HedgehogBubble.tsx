@@ -1,40 +1,93 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { generateComment } from "@/lib/commentGenerator";
-import { Metric } from "@/lib/percentileLogic";
+type OpinionInput = {
+  birthDate: string;
+  sex: "male" | "female" | "";
+  measurements: Array<{
+    measurementDate: string;
+    heightCm: number | null;
+    weightKg: number | null;
+  }>;
+};
+
+type OpinionResult = {
+  title: string;
+  message: string;
+  severity: "calm" | "watch" | "encourage";
+};
 
 interface HedgehogBubbleProps {
-  metric: Metric;
-  currentPercentile: number;
-  prevPercentile?: number;
-  deltaValue?: number;
-  deltaMonths?: number;
-  ageMonths: number;
+  opinionInput: OpinionInput;
 }
 
-const severityStyles = {
+const severityStyles: Record<OpinionResult["severity"], string> = {
   calm: "from-[#e0f2fe] to-[#e7e5ff] text-[#1e3a8a]",
   watch: "from-[#fff7ed] to-[#fde2e4] text-[#9a3412]",
   encourage: "from-[#dcfce7] to-[#e0e7ff] text-[#166534]",
 };
 
-export default function HedgehogBubble({
-  metric,
-  currentPercentile,
-  prevPercentile,
-  deltaValue,
-  deltaMonths,
-  ageMonths,
-}: HedgehogBubbleProps) {
-  const comment = generateComment({
-    metric,
-    currentPercentile,
-    prevPercentile,
-    deltaValue,
-    deltaMonths,
-    ageMonths,
-  });
+const idleComment: OpinionResult = {
+  title: "기록이 필요해요",
+  message: "측정값을 입력하거나 불러오면 성장 의견을 알려드릴게요.",
+  severity: "calm",
+};
+
+export default function HedgehogBubble({ opinionInput }: HedgehogBubbleProps) {
+  const [comment, setComment] = useState<OpinionResult>(idleComment);
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+
+  const payloadKey = useMemo(
+    () => JSON.stringify(opinionInput),
+    [opinionInput]
+  );
+
+  useEffect(() => {
+    const hasData =
+      Boolean(opinionInput.birthDate) && opinionInput.measurements.length > 0;
+    if (!hasData) {
+      setComment(idleComment);
+      setStatus("idle");
+      return;
+    }
+    setStatus("loading");
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch("/api/opinion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payloadKey,
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch opinion");
+        }
+        const data = (await response.json()) as OpinionResult;
+        if (data?.title && data?.message && data?.severity) {
+          setComment(data);
+          setStatus("idle");
+          return;
+        }
+        throw new Error("Invalid response");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setStatus("error");
+        setComment({
+          title: "분석에 시간이 걸려요",
+          message:
+            "잠시 후 다시 확인해주세요. 현재 입력된 정보를 기반으로 확인 중이에요.",
+          severity: "watch",
+        });
+      }
+    }, 400);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [payloadKey, opinionInput.birthDate, opinionInput.measurements.length]);
 
   return (
     <motion.div
@@ -95,7 +148,11 @@ export default function HedgehogBubble({
         </div>
         <div>
           <p className="text-sm font-bold text-[#1a1c24]">{comment.title}</p>
-          <p className="mt-2 text-sm text-[#334155]">{comment.message}</p>
+          <p className="mt-2 text-sm text-[#334155]">
+            {status === "loading"
+              ? "소아 성장전문가 의견을 분석 중이에요..."
+              : comment.message}
+          </p>
         </div>
       </div>
     </motion.div>
