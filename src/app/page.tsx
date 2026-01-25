@@ -8,7 +8,8 @@ import ReportCard from "@/components/ReportCard";
 import ShareButton, { getSharedPayload } from "@/components/ShareButton";
 import { Button } from "@/components/ui/button";
 import { normalizeRrn, isValidRrn, parseRrn } from "@/lib/rrn";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 import {
   Metric,
   buildChartData,
@@ -37,9 +38,8 @@ const defaultChildInfo: ChildInfo = {
 export default function Home() {
   const searchParams = useSearchParams();
   const reportRef = useRef<HTMLDivElement>(null);
-  const [session, setSession] = useState<Awaited<
-    ReturnType<typeof supabase.auth.getSession>
-  >["data"]["session"] | null>(null);
+  const supabase = useMemo(() => getSupabaseClient(), []);
+  const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -61,6 +61,10 @@ export default function Home() {
   >([]);
 
   useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session ?? null);
       setAuthLoading(false);
@@ -69,7 +73,7 @@ export default function Home() {
       setSession(newSession);
     });
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
   const ageMonths = useMemo(
     () => getAgeMonths(childInfo.birthDate, childInfo.measurementDate),
@@ -134,7 +138,7 @@ export default function Home() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !supabase) return;
     const query = childInfo.chartNumber.trim();
     if (query.length < 2) {
       setChartSuggestions([]);
@@ -221,7 +225,7 @@ export default function Home() {
   };
 
   const handleSave = async () => {
-    if (!session) {
+    if (!session || !supabase) {
       setSaveStatus("로그인 후 저장할 수 있어요.");
       return;
     }
@@ -267,7 +271,7 @@ export default function Home() {
   };
 
   const loadPatientByChartNumber = async (chartNumber: string) => {
-    if (!session) {
+    if (!session || !supabase) {
       setLoadStatus("로그인 후 불러올 수 있어요.");
       return;
     }
@@ -378,6 +382,20 @@ export default function Home() {
               <p className="text-sm text-[#64748b]">잠시만 기다려주세요.</p>
             </CardContent>
           </Card>
+        ) : !supabase ? (
+          <Card className="max-w-lg">
+            <CardHeader>
+              <h2 className="text-lg font-bold text-[#1a1c24]">환경변수 설정 필요</h2>
+              <p className="text-sm text-[#64748b]">
+                NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY가 설정되지 않았습니다.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-[#94a3b8]">
+                Vercel Project Settings → Environment Variables에서 추가 후 Redeploy해주세요.
+              </p>
+            </CardContent>
+          </Card>
         ) : !session ? (
           <Card className="max-w-lg">
             <CardHeader>
@@ -407,13 +425,13 @@ export default function Home() {
                   placeholder="********"
                 />
               </div>
-              <Button
-                onClick={async () => {
-                  setAuthMessage("로그인 중...");
+                <Button
+                  onClick={async () => {
+                    setAuthMessage("로그인 중...");
                   const { error } = await supabase.auth.signInWithPassword({
-                    email: authEmail,
-                    password: authPassword,
-                  });
+                      email: authEmail,
+                      password: authPassword,
+                    });
                   if (error) {
                     setAuthMessage(error.message ?? "로그인에 실패했어요.");
                     return;
