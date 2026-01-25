@@ -17,6 +17,9 @@ import {
   valueAtPercentile,
 } from "@/lib/percentileLogic";
 import { theme } from "@/styles/theme";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -34,6 +37,13 @@ const defaultChildInfo: ChildInfo = {
 export default function Home() {
   const searchParams = useSearchParams();
   const reportRef = useRef<HTMLDivElement>(null);
+  const [session, setSession] = useState<Awaited<
+    ReturnType<typeof supabase.auth.getSession>
+  >["data"]["session"] | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState<string>("");
 
   const [childInfo, setChildInfo] = useState<ChildInfo>(defaultChildInfo);
   const [rrnError, setRrnError] = useState<string | null>(null);
@@ -49,6 +59,17 @@ export default function Home() {
   const [history, setHistory] = useState<
     Array<{ measurementDate: string; heightCm: number | null; weightKg: number | null }>
   >([]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   const ageMonths = useMemo(
     () => getAgeMonths(childInfo.birthDate, childInfo.measurementDate),
@@ -113,6 +134,7 @@ export default function Home() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (!session) return;
     const query = childInfo.chartNumber.trim();
     if (query.length < 2) {
       setChartSuggestions([]);
@@ -146,7 +168,7 @@ export default function Home() {
     }, 300);
 
     return () => clearTimeout(handle);
-  }, [childInfo.chartNumber]);
+  }, [childInfo.chartNumber, session]);
 
   const handleFieldChange = (field: keyof ChildInfo, value: string) => {
     setChildInfo((prev) => ({ ...prev, [field]: value }));
@@ -199,6 +221,10 @@ export default function Home() {
   };
 
   const handleSave = async () => {
+    if (!session) {
+      setSaveStatus("로그인 후 저장할 수 있어요.");
+      return;
+    }
     setSaveStatus("Supabase에 저장 중...");
     try {
       const { data: patient, error: patientError } = await supabase
@@ -241,6 +267,10 @@ export default function Home() {
   };
 
   const loadPatientByChartNumber = async (chartNumber: string) => {
+    if (!session) {
+      setLoadStatus("로그인 후 불러올 수 있어요.");
+      return;
+    }
     if (!chartNumber) {
       setLoadStatus("차트번호를 입력해주세요.");
       return;
@@ -339,106 +369,185 @@ export default function Home() {
           </p>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[1.05fr,1fr]">
-          <div className="space-y-5">
-            <ChildInfoForm
-              data={childInfo}
-              rrnError={rrnError}
-              maskedRrn={maskedRrn}
-              onFieldChange={handleFieldChange}
-              onRrnChange={handleRrnChange}
-              chartSuggestions={chartSuggestions}
-              isSearching={isSearching}
-              onChartSelect={loadPatientByChartNumber}
-            />
-
-            <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4 shadow-sm backdrop-blur-xl">
-              <div>
-                <p className="text-xs font-semibold text-[#94a3b8]">보기 기준</p>
-                <p className="text-sm font-semibold text-[#1a1c24]">
-                  {metric === "height" ? "키" : "몸무게"} 성장 리포트
-                </p>
-              </div>
-              <div className="flex items-center gap-2 rounded-full bg-white/80 p-1">
-                <Button
-                  variant={metric === "height" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setMetric("height")}
-                >
-                  키
-                </Button>
-                <Button
-                  variant={metric === "weight" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setMetric("weight")}
-                >
-                  몸무게
-                </Button>
-              </div>
-            </div>
-
-            <PercentileSlider
-              metric={metric}
-              percentile={activePercentile}
-              onChange={handlePercentileChange}
-            />
-
-            <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={handleSave}>Supabase 저장</Button>
-                <Button variant="outline" onClick={() => loadPatientByChartNumber(childInfo.chartNumber)}>
-                  최근 기록 불러오기
-                </Button>
-              </div>
-              {saveStatus && <p className="text-xs text-[#64748b]">{saveStatus}</p>}
-              {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
-              <p className="text-[11px] text-[#94a3b8]">
-                주민등록번호는 Supabase에 저장되지 않습니다.
+        {authLoading ? (
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-bold text-[#1a1c24]">로그인 확인 중</h2>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-[#64748b]">잠시만 기다려주세요.</p>
+            </CardContent>
+          </Card>
+        ) : !session ? (
+          <Card className="max-w-lg">
+            <CardHeader>
+              <h2 className="text-lg font-bold text-[#1a1c24]">클리닉 로그인</h2>
+              <p className="text-sm text-[#64748b]">
+                병원 계정으로 로그인해야 기록을 조회/저장할 수 있어요.
               </p>
-            </div>
-
-            <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-[#1a1c24]">최근 측정 기록</p>
-                <span className="text-xs text-[#94a3b8]">최대 6회</span>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">이메일</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="clinic@example.com"
+                />
               </div>
-              {history.length === 0 ? (
-                <p className="text-xs text-[#94a3b8]">아직 저장된 기록이 없어요.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {history.map((item) => (
-                    <li
-                      key={item.measurementDate}
-                      className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs text-[#475569]"
-                    >
-                      <span>{item.measurementDate}</span>
-                      <span>
-                        {item.heightCm ? `${item.heightCm}cm` : "-"} ·{" "}
-                        {item.weightKg ? `${item.weightKg}kg` : "-"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="password">비밀번호</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="********"
+                />
+              </div>
+              <Button
+                onClick={async () => {
+                  setAuthMessage("로그인 중...");
+                  const { error } = await supabase.auth.signInWithPassword({
+                    email: authEmail,
+                    password: authPassword,
+                  });
+                  if (error) {
+                    setAuthMessage(error.message ?? "로그인에 실패했어요.");
+                    return;
+                  }
+                  setAuthMessage("로그인 완료!");
+                }}
+              >
+                로그인
+              </Button>
+              {authMessage && <p className="text-xs text-[#64748b]">{authMessage}</p>}
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4 shadow-sm backdrop-blur-xl">
+              <div>
+                <p className="text-xs text-[#94a3b8]">로그인 계정</p>
+                <p className="text-sm font-semibold text-[#1a1c24]">{session.user.email}</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  setChartSuggestions([]);
+                  setHistory([]);
+                  setChildInfo(defaultChildInfo);
+                }}
+              >
+                로그아웃
+              </Button>
             </div>
 
-            <ShareButton reportRef={reportRef} payload={sharePayload} />
-          </div>
+            <section className="grid gap-6 lg:grid-cols-[1.05fr,1fr]">
+              <div className="space-y-5">
+                <ChildInfoForm
+                  data={childInfo}
+                  rrnError={rrnError}
+                  maskedRrn={maskedRrn}
+                  onFieldChange={handleFieldChange}
+                  onRrnChange={handleRrnChange}
+                  chartSuggestions={chartSuggestions}
+                  isSearching={isSearching}
+                  onChartSelect={loadPatientByChartNumber}
+                />
 
-          <ReportCard
-            ref={reportRef}
-            clinicName={theme.clinicName}
-            chartNumber={childInfo.chartNumber}
-            childName={childInfo.name}
-            birthDate={childInfo.birthDate}
-            sex={childInfo.sex}
-            measurementDate={childInfo.measurementDate}
-            metric={metric}
-            chartData={chartData}
-            percentile={activePercentile}
-            ageMonths={effectiveAge}
-          />
-        </section>
+                <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4 shadow-sm backdrop-blur-xl">
+                  <div>
+                    <p className="text-xs font-semibold text-[#94a3b8]">보기 기준</p>
+                    <p className="text-sm font-semibold text-[#1a1c24]">
+                      {metric === "height" ? "키" : "몸무게"} 성장 리포트
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-full bg-white/80 p-1">
+                    <Button
+                      variant={metric === "height" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setMetric("height")}
+                    >
+                      키
+                    </Button>
+                    <Button
+                      variant={metric === "weight" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setMetric("weight")}
+                    >
+                      몸무게
+                    </Button>
+                  </div>
+                </div>
+
+                <PercentileSlider
+                  metric={metric}
+                  percentile={activePercentile}
+                  onChange={handlePercentileChange}
+                />
+
+                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
+                  <div className="flex flex-wrap gap-3">
+                    <Button onClick={handleSave}>Supabase 저장</Button>
+                    <Button variant="outline" onClick={() => loadPatientByChartNumber(childInfo.chartNumber)}>
+                      최근 기록 불러오기
+                    </Button>
+                  </div>
+                  {saveStatus && <p className="text-xs text-[#64748b]">{saveStatus}</p>}
+                  {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
+                  <p className="text-[11px] text-[#94a3b8]">
+                    주민등록번호는 Supabase에 저장되지 않습니다.
+                  </p>
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#1a1c24]">최근 측정 기록</p>
+                    <span className="text-xs text-[#94a3b8]">최대 6회</span>
+                  </div>
+                  {history.length === 0 ? (
+                    <p className="text-xs text-[#94a3b8]">아직 저장된 기록이 없어요.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {history.map((item) => (
+                        <li
+                          key={item.measurementDate}
+                          className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs text-[#475569]"
+                        >
+                          <span>{item.measurementDate}</span>
+                          <span>
+                            {item.heightCm ? `${item.heightCm}cm` : "-"} ·{" "}
+                            {item.weightKg ? `${item.weightKg}kg` : "-"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <ShareButton reportRef={reportRef} payload={sharePayload} />
+              </div>
+
+              <ReportCard
+                ref={reportRef}
+                clinicName={theme.clinicName}
+                chartNumber={childInfo.chartNumber}
+                childName={childInfo.name}
+                birthDate={childInfo.birthDate}
+                sex={childInfo.sex}
+                measurementDate={childInfo.measurementDate}
+                metric={metric}
+                chartData={chartData}
+                percentile={activePercentile}
+                ageMonths={effectiveAge}
+              />
+            </section>
+          </>
+        )}
       </div>
     </main>
   );

@@ -8,7 +8,7 @@ function getEnv(name: string) {
   return value;
 }
 
-export function createSupabaseServer() {
+export function createSupabaseServer(accessToken?: string) {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
   const anonKey =
@@ -29,5 +29,12 @@ export function createSupabaseServer() {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
   });
 }

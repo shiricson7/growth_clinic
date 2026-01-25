@@ -19,6 +19,12 @@ function isValidDate(value: string) {
 
 export async function POST(request: Request) {
   try {
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
+    }
+    const accessToken = authHeader.replace("Bearer ", "").trim();
+
     const body = (await request.json()) as SavePayload;
     const { chartNumber, name, birthDate, sex, measurementDate, heightCm, weightKg } = body;
 
@@ -36,7 +42,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createSupabaseServer();
+    const supabase = createSupabaseServer(accessToken);
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) {
+      return NextResponse.json({ error: "인증이 만료되었습니다." }, { status: 401 });
+    }
     const { data: patient, error: patientError } = await supabase
       .from("patients")
       .upsert(
@@ -88,6 +98,11 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
+  }
+  const accessToken = authHeader.replace("Bearer ", "").trim();
   const { searchParams } = new URL(request.url);
   const chartNumber = searchParams.get("chartNumber");
 
@@ -95,7 +110,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "chartNumber가 필요합니다." }, { status: 400 });
   }
 
-  const supabase = createSupabaseServer();
+  const supabase = createSupabaseServer(accessToken);
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) {
+    return NextResponse.json({ error: "인증이 만료되었습니다." }, { status: 401 });
+  }
   const { data: patient, error: patientError } = await supabase
     .from("patients")
     .select("id, chart_number, name, birth_date, sex")
