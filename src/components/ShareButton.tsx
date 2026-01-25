@@ -18,7 +18,7 @@ export type SharePayload = {
 };
 
 interface ShareButtonProps {
-  reportRef: React.RefObject<HTMLDivElement>;
+  reportRef: React.RefObject<HTMLDivElement | null>;
   payload: SharePayload;
 }
 
