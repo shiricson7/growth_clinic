@@ -168,22 +168,20 @@ export async function POST(request: Request) {
       text: {
         format: {
           type: "json_schema",
-          json_schema: {
-            name: "growth_opinion",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                title: { type: "string" },
-                message: { type: "string" },
-                severity: {
-                  type: "string",
-                  enum: ["calm", "watch", "encourage"],
-                },
+          name: "growth_opinion",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: { type: "string" },
+              message: { type: "string" },
+              severity: {
+                type: "string",
+                enum: ["calm", "watch", "encourage"],
               },
-              required: ["title", "message", "severity"],
             },
+            required: ["title", "message", "severity"],
           },
         },
       },
