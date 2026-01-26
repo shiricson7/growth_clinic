@@ -34,7 +34,7 @@ interface ChildInfoFormProps {
   onFieldChange: (field: keyof ChildInfo, value: string) => void;
   onRrnChange: (value: string) => void;
   csvStatus?: string;
-  csvInputRef?: RefObject<HTMLInputElement>;
+  csvInputRef?: RefObject<HTMLInputElement | null>;
   onCsvFileChange?: (file: File | null) => void;
   onCsvUpload?: () => void;
   showMeasurementDate?: boolean;
