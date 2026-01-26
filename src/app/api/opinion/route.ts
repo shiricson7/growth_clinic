@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     let outputText = extracted.outputText;
 
     if (!outputText && extracted.id && extracted.status === "incomplete") {
-      const maxAttempts = 15;
+      const maxAttempts = 30;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         const followUp = await fetch(
