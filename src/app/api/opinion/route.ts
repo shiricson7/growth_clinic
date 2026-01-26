@@ -159,7 +159,7 @@ export async function POST(request: Request) {
     const requestBody = {
       model: "gpt-5-mini",
       max_output_tokens: 220,
-      reasoning: { effort: "medium" },
+      reasoning: { effort: "minimal" },
       instructions:
         "너는 소아 성장전문가다. 제공된 데이터만 사용해서 보호자에게 전달하듯 짧고 정확하게 한국어로 설명한다. 진단이나 단정 대신 관찰과 다음 확인 포인트를 제안한다. 2~4문장으로 작성하고, 반드시 JSON 형식으로만 응답한다.",
       input: `다음 성장 기록을 분석해 주세요. JSON 형식: {\"title\":\"...\",\"message\":\"...\",\"severity\":\"calm|watch|encourage\"}. 데이터: ${JSON.stringify(
