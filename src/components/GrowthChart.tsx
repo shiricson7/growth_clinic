@@ -26,14 +26,16 @@ const formatAgeLabel = (rawMonths: number) => {
   return `${months}개월`;
 };
 
-const buildAgeTicks = (maxAge: number) => {
+const buildAgeTicks = (minAge: number, maxAge: number) => {
   const step = 6;
-  const end = Math.max(0, Math.round(maxAge));
+  const start = Math.max(0, Math.floor(minAge));
+  const end = Math.max(start, Math.round(maxAge));
   const ticks: number[] = [];
-  for (let m = 0; m <= end; m += step) {
+  const firstTick = Math.floor(start / step) * step;
+  for (let m = firstTick; m <= end; m += step) {
     ticks.push(m);
   }
-  if (ticks[ticks.length - 1] !== end) {
+  if (ticks.length === 0 || ticks[ticks.length - 1] !== end) {
     ticks.push(end);
   }
   return ticks;
@@ -50,7 +52,12 @@ interface GrowthChartProps {
 
 export default function GrowthChart({ metric, chartData, currentAgeMonths }: GrowthChartProps) {
   const maxAge = chartData.length ? chartData[chartData.length - 1].ageMonths : 0;
-  const ageTicks = buildAgeTicks(maxAge);
+  const patientAges = chartData
+    .filter((point) => typeof point.patient === "number")
+    .map((point) => point.ageMonths);
+  const earliestPatientAge = patientAges.length ? Math.min(...patientAges) : 0;
+  const minAge = Math.max(0, earliestPatientAge - 6);
+  const ageTicks = buildAgeTicks(minAge, maxAge);
 
   return (
     <div className="h-full w-full rounded-2xl border border-white/60 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
@@ -75,6 +82,7 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
 
             <XAxis
               dataKey="ageMonths"
+              type="number"
               tick={{ fontSize: 11, fill: "#94a3b8" }}
               tickLine={false}
               axisLine={false}
@@ -82,6 +90,8 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
               interval={0}
               minTickGap={14}
               tickMargin={8}
+              domain={[minAge, maxAge]}
+              allowDataOverflow
               tickFormatter={formatAgeLabel}
             />
             <YAxis hide domain={["dataMin - 3", "dataMax + 3"]} />
@@ -92,9 +102,20 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
                 if (!active || !payload?.length) return null;
                 const point = payload[0].payload as ChartPoint;
                 const value = point.patient ?? point.predicted;
+                const percentile =
+                  typeof value === "number"
+                    ? percentileFromValue(metric, point.ageMonths, value)
+                    : null;
                 return (
                   <div className="rounded-lg bg-[#1a1c24] px-3 py-2 text-xs text-white shadow-lg">
-                    {formatAgeLabel(point.ageMonths)} · {value ? `${value}` : "데이터 없음"}
+                    <div>
+                      {formatAgeLabel(point.ageMonths)} · {value ? `${value}` : "데이터 없음"}
+                    </div>
+                    {percentile !== null && (
+                      <div className="text-[10px] text-white/80">
+                        P{formatPercentileLabel(percentile)}
+                      </div>
+                    )}
                   </div>
                 );
               }}

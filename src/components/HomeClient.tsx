@@ -604,6 +604,34 @@ export default function HomeClient() {
       .filter(Boolean)
       .join(" · ");
 
+    const latestRow = uniqueRows.reduce((latest, row) =>
+      latest.measurement_date < row.measurement_date ? row : latest
+    );
+    const latestAge = getAgeMonths(childInfo.birthDate, latestRow.measurement_date);
+    setChildInfo((prev) => ({
+      ...prev,
+      measurementDate: latestRow.measurement_date,
+      heightCm:
+        typeof latestRow.height_cm === "number"
+          ? latestRow.height_cm.toString()
+          : prev.heightCm,
+      weightKg:
+        typeof latestRow.weight_kg === "number"
+          ? latestRow.weight_kg.toString()
+          : prev.weightKg,
+    }));
+    setPercentiles((prev) => ({
+      ...prev,
+      height:
+        typeof latestRow.height_cm === "number"
+          ? percentileFromValue("height", latestAge || 24, latestRow.height_cm)
+          : prev.height,
+      weight:
+        typeof latestRow.weight_kg === "number"
+          ? percentileFromValue("weight", latestAge || 24, latestRow.weight_kg)
+          : prev.weight,
+    }));
+
     setCsvStatus(`CSV 업로드 완료! ${summary}`);
     setCsvFile(null);
     setShowMeasurementDate(false);
@@ -861,11 +889,6 @@ export default function HomeClient() {
                   onCsvFileChange={(file) => {
                     setCsvFile(file);
                     setCsvStatus("");
-                    if (file) {
-                      setShowMeasurementDate(false);
-                    } else {
-                      setShowMeasurementDate(true);
-                    }
                   }}
                   onCsvUpload={handleCsvUpload}
                   showMeasurementDate={showMeasurementDate}
