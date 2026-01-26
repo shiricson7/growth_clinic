@@ -19,6 +19,7 @@ interface MeasurementsPanelProps {
   onAdd: (measurement: Measurement) => void;
   onUpdate: (measurement: Measurement) => void;
   onDelete: (id: string) => void;
+  onImport: (items: Measurement[]) => { added: number; updated: number; skipped: number };
 }
 
 type FormState = {
@@ -32,6 +33,7 @@ export default function MeasurementsPanel({
   onAdd,
   onUpdate,
   onDelete,
+  onImport,
 }: MeasurementsPanelProps) {
   const [form, setForm] = useState<FormState>({
     date: "",
@@ -40,6 +42,8 @@ export default function MeasurementsPanel({
   });
   const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
+  const [csvStatus, setCsvStatus] = useState<string>("");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   const sorted = useMemo(
     () =>
@@ -53,6 +57,81 @@ export default function MeasurementsPanel({
     setForm({ date: "", heightCm: "", weightKg: "" });
     setEditId(null);
     setError("");
+  };
+
+  const splitCsvLine = (line: string) => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (char === "," && !inQuotes) {
+        result.push(current);
+        current = "";
+        continue;
+      }
+      current += char;
+    }
+    result.push(current);
+    return result;
+  };
+
+  const parseCsv = (content: string) => {
+    const trimmed = content.replace(/^\uFEFF/, "").trim();
+    if (!trimmed) {
+      return { rows: [], skipped: 0, error: "빈 CSV 파일입니다." } as const;
+    }
+    const lines = trimmed.split(/\r?\n/).filter((line) => line.trim() !== "");
+    if (lines.length === 0) {
+      return { rows: [], skipped: 0, error: "CSV 데이터를 찾을 수 없습니다." } as const;
+    }
+
+    let startIndex = 0;
+    let columnIndex = { date: 0, height: 1, weight: 2 };
+    const headerCells = splitCsvLine(lines[0]).map((cell) => cell.trim().toLowerCase());
+    const dateIndex = headerCells.findIndex((cell) => cell === "date" || cell === "measurement_date");
+    const heightIndex = headerCells.findIndex((cell) => cell === "height_cm" || cell === "height");
+    const weightIndex = headerCells.findIndex((cell) => cell === "weight_kg" || cell === "weight");
+    if (dateIndex !== -1 && heightIndex !== -1 && weightIndex !== -1) {
+      columnIndex = { date: dateIndex, height: heightIndex, weight: weightIndex };
+      startIndex = 1;
+    }
+
+    let skipped = 0;
+    const rows: Measurement[] = [];
+    for (let i = startIndex; i < lines.length; i += 1) {
+      const cells = splitCsvLine(lines[i]);
+      const date = (cells[columnIndex.date] ?? "").trim();
+      if (!date || !isValidDate(date)) {
+        skipped += 1;
+        continue;
+      }
+      const heightRaw = (cells[columnIndex.height] ?? "").trim();
+      const weightRaw = (cells[columnIndex.weight] ?? "").trim();
+      const height = heightRaw ? Number(heightRaw) : null;
+      const weight = weightRaw ? Number(weightRaw) : null;
+      if ((height === null || Number.isNaN(height)) && (weight === null || Number.isNaN(weight))) {
+        skipped += 1;
+        continue;
+      }
+      rows.push({
+        id: createId(),
+        date,
+        heightCm: height === null || Number.isNaN(height) ? undefined : height,
+        weightKg: weight === null || Number.isNaN(weight) ? undefined : weight,
+      });
+    }
+
+    return { rows, skipped } as const;
   };
 
   const handleSubmit = () => {
@@ -90,6 +169,34 @@ export default function MeasurementsPanel({
       weightKg: measurement.weightKg?.toString() ?? "",
     });
     setError("");
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      setCsvStatus("CSV 파일을 선택해주세요.");
+      return;
+    }
+    setCsvStatus("CSV를 읽는 중...");
+    try {
+      const content = await csvFile.text();
+      const parsed = parseCsv(content);
+      if ("error" in parsed && parsed.error) {
+        setCsvStatus(parsed.error);
+        return;
+      }
+      const result = onImport(parsed.rows);
+      const summary = [
+        `${result.added}건 추가`,
+        result.updated ? `${result.updated}건 갱신` : null,
+        parsed.skipped ? `${parsed.skipped}건 제외` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      setCsvStatus(`CSV 업로드 완료! ${summary}`);
+      setCsvFile(null);
+    } catch (error) {
+      setCsvStatus("CSV 파일을 읽을 수 없습니다.");
+    }
   };
 
   return (
@@ -142,6 +249,29 @@ export default function MeasurementsPanel({
               취소
             </Button>
           )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-[#1a1c24]">CSV 업로드</p>
+            <p className="text-xs text-[#94a3b8]">date, height_cm, weight_kg</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleCsvUpload}>
+            업로드
+          </Button>
+        </div>
+        <div className="mt-3 space-y-2">
+          <Input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(event) => {
+              setCsvFile(event.target.files?.[0] ?? null);
+              setCsvStatus("");
+            }}
+          />
+          {csvStatus && <p className="text-xs text-[#64748b]">{csvStatus}</p>}
         </div>
       </div>
 

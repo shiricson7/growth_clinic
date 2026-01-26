@@ -14,3 +14,11 @@ export type TherapyCourse = {
   doseNote?: string;
   note?: string;
 };
+
+export type PatientInfo = {
+  name: string;
+  chartNumber: string;
+  rrn: string;
+  sex: "male" | "female" | "";
+  birthDate: string;
+};

@@ -1,21 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Measurement, TherapyCourse } from "@/lib/types";
+import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import {
   loadMeasurements,
   loadTherapyCourses,
   saveMeasurements,
   saveTherapyCourses,
   clearGrowthStorage,
+  loadPatientInfo,
+  savePatientInfo,
 } from "@/lib/storage";
 import { buildDemoMeasurements, buildDemoTherapies } from "@/lib/demoData";
+import { deriveRrnInfo, normalizeRrn } from "@/lib/rrn";
+import { differenceInMonths, parseISO } from "date-fns";
 import GrowthChart from "@/components/GrowthChart";
 import MeasurementsPanel from "@/components/MeasurementsPanel";
 import TherapyPanel from "@/components/TherapyPanel";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const sortMeasurements = (items: Measurement[]) =>
   [...items].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -28,13 +34,24 @@ const sortTherapies = (items: TherapyCourse[]) =>
 export default function Page() {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [therapyCourses, setTherapyCourses] = useState<TherapyCourse[]>([]);
+  const [patientInfo, setPatientInfo] = useState<PatientInfo>({
+    name: "",
+    chartNumber: "",
+    rrn: "",
+    sex: "",
+    birthDate: "",
+  });
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const storedMeasurements = loadMeasurements();
     const storedCourses = loadTherapyCourses();
+    const storedPatient = loadPatientInfo();
     setMeasurements(sortMeasurements(storedMeasurements));
     setTherapyCourses(sortTherapies(storedCourses));
+    if (storedPatient) {
+      setPatientInfo(storedPatient);
+    }
     setHydrated(true);
   }, []);
 
@@ -47,6 +64,11 @@ export default function Page() {
     if (!hydrated) return;
     saveTherapyCourses(therapyCourses);
   }, [therapyCourses, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    savePatientInfo(patientInfo);
+  }, [patientInfo, hydrated]);
 
   const handleAddMeasurement = (measurement: Measurement) => {
     setMeasurements((prev) => sortMeasurements([...prev, measurement]));
@@ -81,10 +103,61 @@ export default function Page() {
     const demoCourses = buildDemoTherapies(demoMeasurements);
     setMeasurements(sortMeasurements(demoMeasurements));
     setTherapyCourses(sortTherapies(demoCourses));
+    setPatientInfo({
+      name: "",
+      chartNumber: "",
+      rrn: "",
+      sex: "",
+      birthDate: "",
+    });
     clearGrowthStorage();
     saveMeasurements(demoMeasurements);
     saveTherapyCourses(demoCourses);
   };
+
+  const handleCsvImport = (items: Measurement[]) => {
+    let added = 0;
+    let updated = 0;
+    const byDate = new Map<string, Measurement>();
+    measurements.forEach((item) => byDate.set(item.date, item));
+    items.forEach((item) => {
+      const existing = byDate.get(item.date);
+      if (existing) {
+        byDate.set(item.date, {
+          ...existing,
+          heightCm: item.heightCm ?? existing.heightCm,
+          weightKg: item.weightKg ?? existing.weightKg,
+        });
+        updated += 1;
+      } else {
+        byDate.set(item.date, item);
+        added += 1;
+      }
+    });
+    setMeasurements(sortMeasurements(Array.from(byDate.values())));
+    return { added, updated, skipped: items.length - added - updated };
+  };
+
+  const handleRrnChange = (value: string) => {
+    const digits = normalizeRrn(value);
+    const info = deriveRrnInfo(digits);
+    setPatientInfo((prev) => ({
+      ...prev,
+      rrn: value,
+      sex: info.sex ?? prev.sex,
+      birthDate: info.birthDate ?? prev.birthDate,
+    }));
+  };
+
+  const ageLabel = useMemo(() => {
+    if (!patientInfo.birthDate) return "";
+    const months = differenceInMonths(new Date(), parseISO(patientInfo.birthDate));
+    if (!Number.isFinite(months) || months < 0) return "";
+    const years = Math.floor(months / 12);
+    const remaining = months % 12;
+    if (years <= 0) return `${remaining}개월`;
+    return remaining === 0 ? `${years}세` : `${years}세 ${remaining}개월`;
+  }, [patientInfo.birthDate]);
 
   const totalSummary = useMemo(
     () => ({
@@ -138,6 +211,74 @@ export default function Page() {
               </p>
             </CardHeader>
             <CardContent>
+              <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-[#1a1c24]">환자 정보</p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="patientName">이름</Label>
+                    <Input
+                      id="patientName"
+                      value={patientInfo.name}
+                      onChange={(event) =>
+                        setPatientInfo((prev) => ({
+                          ...prev,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="예: 김지안"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="chartNumber">차트번호</Label>
+                    <Input
+                      id="chartNumber"
+                      value={patientInfo.chartNumber}
+                      onChange={(event) =>
+                        setPatientInfo((prev) => ({
+                          ...prev,
+                          chartNumber: event.target.value,
+                        }))
+                      }
+                      placeholder="예: 12345"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="rrn">주민등록번호</Label>
+                    <Input
+                      id="rrn"
+                      value={patientInfo.rrn}
+                      onChange={(event) => handleRrnChange(event.target.value)}
+                      placeholder="13자리 (예: 230101-1234567)"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sex">성별</Label>
+                    <Input
+                      id="sex"
+                      value={
+                        patientInfo.sex === "male"
+                          ? "남자"
+                          : patientInfo.sex === "female"
+                          ? "여자"
+                          : ""
+                      }
+                      readOnly
+                      placeholder="자동완성"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="age">나이</Label>
+                    <Input id="age" value={ageLabel} readOnly placeholder="자동완성" />
+                  </div>
+                </div>
+                {patientInfo.birthDate && (
+                  <p className="mt-3 text-xs text-[#94a3b8]">
+                    생년월일: {patientInfo.birthDate}
+                  </p>
+                )}
+              </div>
+
               <Tabs defaultValue="measurements">
                 <TabsList className="mb-5">
                   <TabsTrigger value="measurements">Measurements</TabsTrigger>
@@ -150,6 +291,7 @@ export default function Page() {
                     onAdd={handleAddMeasurement}
                     onUpdate={handleUpdateMeasurement}
                     onDelete={handleDeleteMeasurement}
+                    onImport={handleCsvImport}
                   />
                 </TabsContent>
 

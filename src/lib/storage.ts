@@ -1,7 +1,8 @@
-import type { Measurement, TherapyCourse } from "@/lib/types";
+import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 
 const MEASUREMENTS_KEY = "growth_measurements_v1";
 const THERAPY_KEY = "growth_therapy_courses_v1";
+const PATIENT_KEY = "growth_patient_v1";
 
 const safeParse = <T>(value: string | null, fallback: T): T => {
   if (!value) return fallback;
@@ -38,4 +39,18 @@ export const clearGrowthStorage = () => {
   if (!hasWindow()) return;
   window.localStorage.removeItem(MEASUREMENTS_KEY);
   window.localStorage.removeItem(THERAPY_KEY);
+  window.localStorage.removeItem(PATIENT_KEY);
+};
+
+export const loadPatientInfo = (): PatientInfo | null => {
+  if (!hasWindow()) return null;
+  return safeParse<PatientInfo | null>(
+    window.localStorage.getItem(PATIENT_KEY),
+    null
+  );
+};
+
+export const savePatientInfo = (info: PatientInfo) => {
+  if (!hasWindow()) return;
+  window.localStorage.setItem(PATIENT_KEY, JSON.stringify(info));
 };
