@@ -211,8 +211,13 @@ export async function POST(request: Request) {
     const outputText = directOutput ?? extracted;
     if (!outputText) {
       const outputCount = Array.isArray(data?.output) ? data.output.length : 0;
+      const outputTypes = Array.isArray(data?.output)
+        ? data.output.map((item: { type?: string }) => item?.type ?? "unknown").join(",")
+        : "none";
       return NextResponse.json(
-        fallbackWithReason(`openai_empty_response:output_count=${outputCount}`)
+        fallbackWithReason(
+          `openai_empty_response:output_count=${outputCount};types=${outputTypes}`
+        )
       );
     }
     if (outputText.startsWith("__REFUSAL__:")) {
