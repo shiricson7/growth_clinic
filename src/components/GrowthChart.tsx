@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Metric, ChartPoint } from "@/lib/percentileLogic";
+import { Metric, ChartPoint, percentileFromValue } from "@/lib/percentileLogic";
 
 const metricTitle: Record<Metric, string> = {
   height: "키 성장 곡선",
@@ -38,6 +38,9 @@ const buildAgeTicks = (maxAge: number) => {
   }
   return ticks;
 };
+
+const formatPercentileLabel = (value: number) =>
+  Number.isInteger(value) ? `${value}` : value.toFixed(1);
 
 interface GrowthChartProps {
   metric: Metric;
@@ -114,17 +117,36 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
               stroke="#6366f1"
               strokeWidth={2.5}
               dot={(props) => {
-                const isCurrent = Math.round(props.payload?.ageMonths) === Math.round(currentAgeMonths);
+                const { cx, cy, payload, value } = props;
+                if (cx === undefined || cy === undefined) return null;
+                const numericValue =
+                  typeof value === "number" ? value : (payload?.patient as number | undefined);
+                if (typeof numericValue !== "number") return null;
+                const ageMonths = payload?.ageMonths ?? 0;
+                const percentile = percentileFromValue(metric, ageMonths, numericValue);
+                const isCurrent = Math.round(ageMonths) === Math.round(currentAgeMonths);
                 const radius = isCurrent ? 6 : 4;
                 return (
-                  <circle
-                    cx={props.cx}
-                    cy={props.cy}
-                    r={radius}
-                    fill={isCurrent ? "#6366f1" : "#fff"}
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                  />
+                  <g>
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={radius}
+                      fill={isCurrent ? "#6366f1" : "#fff"}
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                    />
+                    <text
+                      x={cx}
+                      y={cy - (isCurrent ? 12 : 10)}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fontWeight={600}
+                      fill="#6366f1"
+                    >
+                      P{formatPercentileLabel(percentile)}
+                    </text>
+                  </g>
                 );
               }}
               activeDot={{ r: 6, fill: "#6366f1", stroke: "#fff", strokeWidth: 2 }}

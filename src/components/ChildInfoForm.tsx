@@ -1,7 +1,9 @@
 "use client";
 
+import type { RefObject } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -31,6 +33,12 @@ interface ChildInfoFormProps {
   onChartSelect?: (chartNumber: string) => void;
   onFieldChange: (field: keyof ChildInfo, value: string) => void;
   onRrnChange: (value: string) => void;
+  csvStatus?: string;
+  csvInputRef?: RefObject<HTMLInputElement>;
+  onCsvFileChange?: (file: File | null) => void;
+  onCsvUpload?: () => void;
+  showMeasurementDate?: boolean;
+  onShowMeasurementDate?: () => void;
 }
 
 export default function ChildInfoForm({
@@ -43,6 +51,12 @@ export default function ChildInfoForm({
   onChartSelect,
   onFieldChange,
   onRrnChange,
+  csvStatus,
+  csvInputRef,
+  onCsvFileChange,
+  onCsvUpload,
+  showMeasurementDate = true,
+  onShowMeasurementDate,
 }: ChildInfoFormProps) {
   const inputTone = isPristine ? "text-[#94a3b8]" : "";
 
@@ -162,15 +176,52 @@ export default function ChildInfoForm({
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2 md:col-span-1">
-            <Label htmlFor="measurementDate">최근 측정일</Label>
-            <Input
-              id="measurementDate"
-              type="date"
-              value={data.measurementDate}
-              onChange={(e) => onFieldChange("measurementDate", e.target.value)}
-              className={inputTone}
-            />
+          <div className="space-y-3 md:col-span-1">
+            {showMeasurementDate && (
+              <div className="space-y-2">
+                <Label htmlFor="measurementDate">최근 측정일</Label>
+                <Input
+                  id="measurementDate"
+                  type="date"
+                  value={data.measurementDate}
+                  onChange={(e) => onFieldChange("measurementDate", e.target.value)}
+                  className={inputTone}
+                />
+              </div>
+            )}
+            {onCsvUpload && onCsvFileChange && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="csvUpload">이전 기록 CSV</Label>
+                  {!showMeasurementDate && onShowMeasurementDate && (
+                    <button
+                      type="button"
+                      className="text-[11px] font-semibold text-[#64748b] hover:text-[#1a1c24]"
+                      onClick={onShowMeasurementDate}
+                    >
+                      최근 측정일 다시 보기
+                    </button>
+                  )}
+                </div>
+                <Input
+                  id="csvUpload"
+                  type="file"
+                  accept=".csv,text/csv"
+                  ref={csvInputRef}
+                  onChange={(e) => onCsvFileChange(e.target.files?.[0] ?? null)}
+                />
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={onCsvUpload}>
+                    CSV 업로드
+                  </Button>
+                  <span className="text-[11px] text-[#94a3b8]">최근 측정일 이전</span>
+                </div>
+                {csvStatus && <p className="text-xs text-[#64748b]">{csvStatus}</p>}
+                <p className="text-[11px] text-[#94a3b8]">
+                  date, height_cm, weight_kg 컬럼만 처리합니다.
+                </p>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="height">키 (cm)</Label>

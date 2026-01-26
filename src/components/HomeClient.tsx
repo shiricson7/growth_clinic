@@ -123,8 +123,8 @@ const parseMeasurementsCsv = (content: string): CsvParseResult => {
 };
 
 const defaultChildInfo: ChildInfo = {
-  chartNumber: "12345",
-  name: "서윤",
+  chartNumber: "",
+  name: "",
   rrn: "",
   birthDate: "",
   sex: "",
@@ -151,9 +151,12 @@ export default function HomeClient() {
   const [percentiles, setPercentiles] = useState({ height: 50, weight: 55 });
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [loadStatus, setLoadStatus] = useState<string>("");
+  const [historyStatus, setHistoryStatus] = useState<string>("");
   const [csvStatus, setCsvStatus] = useState<string>("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const [patientId, setPatientId] = useState<string | null>(null);
+  const [showMeasurementDate, setShowMeasurementDate] = useState(true);
   const [chartSuggestions, setChartSuggestions] = useState<
     Array<{ chartNumber: string; name: string; birthDate: string; sex: "male" | "female" }>
   >([]);
@@ -344,6 +347,7 @@ export default function HomeClient() {
     setChildInfo((prev) => ({ ...prev, [field]: value }));
     if (field === "chartNumber") {
       setHistory([]);
+      setPatientId(null);
     }
     if (field === "heightCm" && value) {
       setPercentiles((prev) => ({
@@ -423,6 +427,7 @@ export default function HomeClient() {
         setSaveStatus(patientError?.message ?? "저장에 실패했어요.");
         return;
       }
+      setPatientId(patient.id);
 
       const { error: measurementError } = await supabase
         .from("measurements")
@@ -454,6 +459,20 @@ export default function HomeClient() {
     } catch (error) {
       setSaveStatus("저장 중 오류가 발생했어요.");
     }
+  };
+
+  const resolvePatientId = async () => {
+    if (patientId) return patientId;
+    const chartNumber = childInfo.chartNumber.trim();
+    if (!chartNumber) return null;
+    const { data, error } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("chart_number", chartNumber)
+      .maybeSingle();
+    if (error || !data?.id) return null;
+    setPatientId(data.id);
+    return data.id;
   };
 
   const handleCsvUpload = async () => {
@@ -529,6 +548,7 @@ export default function HomeClient() {
       setCsvStatus(patientError?.message ?? "환자 정보를 저장할 수 없습니다.");
       return;
     }
+    setPatientId(patient.id);
 
     const payload = uniqueRows.map((row) => ({
       patient_id: patient.id,
@@ -585,9 +605,39 @@ export default function HomeClient() {
 
     setCsvStatus(`CSV 업로드 완료! ${summary}`);
     setCsvFile(null);
+    setShowMeasurementDate(false);
     if (csvInputRef.current) {
       csvInputRef.current.value = "";
     }
+  };
+
+  const handleDeleteHistory = async (measurementDate: string) => {
+    if (!session || !supabase) {
+      setHistoryStatus("로그인 후 삭제할 수 있어요.");
+      return;
+    }
+    if (measurementDate === childInfo.measurementDate) {
+      setHistoryStatus("최근 측정일은 삭제할 수 없어요.");
+      return;
+    }
+    setHistoryStatus("삭제 중...");
+    const resolvedId = await resolvePatientId();
+    if (!resolvedId) {
+      setHistoryStatus("환자 정보를 찾을 수 없어요.");
+      return;
+    }
+    const { error } = await supabase
+      .from("measurements")
+      .delete()
+      .eq("patient_id", resolvedId)
+      .eq("measurement_date", measurementDate);
+
+    if (error) {
+      setHistoryStatus(error.message ?? "삭제에 실패했어요.");
+      return;
+    }
+    setHistory((prev) => prev.filter((item) => item.measurementDate !== measurementDate));
+    setHistoryStatus("삭제 완료!");
   };
 
   const loadPatientByChartNumber = async (chartNumber: string) => {
@@ -666,6 +716,8 @@ export default function HomeClient() {
     setMaskedRrn(null);
     setRrnError(null);
     setLoadStatus("최근 기록을 불러왔어요.");
+    setPatientId(patient.id);
+    setShowMeasurementDate(true);
   };
 
   const sharePayload = {
@@ -780,6 +832,11 @@ export default function HomeClient() {
                   setHistory([]);
                   setChildInfo(defaultChildInfo);
                   setIsPristine(true);
+                  setCsvFile(null);
+                  setCsvStatus("");
+                  setHistoryStatus("");
+                  setPatientId(null);
+                  setShowMeasurementDate(true);
                 }}
               >
                 로그아웃
@@ -798,6 +855,27 @@ export default function HomeClient() {
                   chartSuggestions={chartSuggestions}
                   isSearching={isSearching}
                   onChartSelect={loadPatientByChartNumber}
+                  csvStatus={csvStatus}
+                  csvInputRef={csvInputRef}
+                  onCsvFileChange={(file) => {
+                    setCsvFile(file);
+                    setCsvStatus("");
+                    if (file) {
+                      setShowMeasurementDate(false);
+                    } else {
+                      setShowMeasurementDate(true);
+                    }
+                  }}
+                  onCsvUpload={handleCsvUpload}
+                  showMeasurementDate={showMeasurementDate}
+                  onShowMeasurementDate={() => {
+                    setShowMeasurementDate(true);
+                    setCsvFile(null);
+                    setCsvStatus("");
+                    if (csvInputRef.current) {
+                      csvInputRef.current.value = "";
+                    }
+                  }}
                 />
 
                 <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4 shadow-sm backdrop-blur-xl">
@@ -847,33 +925,6 @@ export default function HomeClient() {
 
                 <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#1a1c24]">이전 측정 기록 CSV 업로드</p>
-                    <span className="text-xs text-[#94a3b8]">최근 측정일 이전</span>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="csvUpload">CSV 파일</Label>
-                    <Input
-                      id="csvUpload"
-                      type="file"
-                      accept=".csv,text/csv"
-                      ref={csvInputRef}
-                      onChange={(e) => {
-                        setCsvFile(e.target.files?.[0] ?? null);
-                        setCsvStatus("");
-                      }}
-                    />
-                  </div>
-                  <Button variant="outline" onClick={handleCsvUpload}>
-                    CSV 업로드
-                  </Button>
-                  {csvStatus && <p className="text-xs text-[#64748b]">{csvStatus}</p>}
-                  <p className="text-[11px] text-[#94a3b8]">
-                    date, height_cm, weight_kg 컬럼(헤더 포함/미포함 가능)만 처리합니다.
-                  </p>
-                </div>
-
-                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
-                  <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-[#1a1c24]">최근 측정 기록</p>
                     <span className="text-xs text-[#94a3b8]">최대 6회</span>
                   </div>
@@ -887,14 +938,26 @@ export default function HomeClient() {
                           className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs text-[#475569]"
                         >
                           <span>{item.measurementDate}</span>
-                          <span>
-                            {item.heightCm ? `${item.heightCm}cm` : "-"} ·{" "}
-                            {item.weightKg ? `${item.weightKg}kg` : "-"}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span>
+                              {item.heightCm ? `${item.heightCm}cm` : "-"} ·{" "}
+                              {item.weightKg ? `${item.weightKg}kg` : "-"}
+                            </span>
+                            {item.measurementDate !== childInfo.measurementDate && (
+                              <button
+                                type="button"
+                                className="rounded-full border border-white/80 px-2 py-1 text-[10px] font-semibold text-[#475569] hover:bg-white"
+                                onClick={() => handleDeleteHistory(item.measurementDate)}
+                              >
+                                삭제
+                              </button>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
                   )}
+                  {historyStatus && <p className="text-xs text-[#64748b]">{historyStatus}</p>}
                 </div>
 
                 <ShareButton reportRef={reportRef} payload={sharePayload} />
