@@ -165,7 +165,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: "gpt-5-mini",
         temperature: 0.4,
-        max_completion_tokens: 220,
+        max_tokens: 220,
         response_format: { type: "json_object" },
         messages: [
           {
@@ -184,8 +184,17 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
+      let detail = "";
+      try {
+        const errorBody = await response.json();
+        const errorMsg = errorBody?.error?.message;
+        const errorCode = errorBody?.error?.code;
+        detail = errorMsg ? `:${errorMsg}${errorCode ? `(${errorCode})` : ""}` : "";
+      } catch (error) {
+        detail = "";
+      }
       return NextResponse.json(
-        fallbackWithReason(`openai_http_${response.status}`)
+        fallbackWithReason(`openai_http_${response.status}${detail}`)
       );
     }
 
