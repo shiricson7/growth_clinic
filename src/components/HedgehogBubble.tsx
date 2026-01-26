@@ -38,6 +38,7 @@ const idleComment: OpinionResult = {
 export default function HedgehogBubble({ opinionInput }: HedgehogBubbleProps) {
   const [comment, setComment] = useState<OpinionResult>(idleComment);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const isLoading = status === "loading";
 
   const payloadKey = useMemo(
     () => JSON.stringify(opinionInput),
@@ -101,7 +102,15 @@ export default function HedgehogBubble({ opinionInput }: HedgehogBubbleProps) {
         className={`absolute inset-0 -z-10 bg-gradient-to-br ${severityStyles[comment.severity]} opacity-40`}
       />
       <div className="flex items-start gap-4">
-        <div className="h-14 w-14 rounded-full bg-white/90 p-2 shadow-sm">
+        <motion.div
+          className="h-14 w-14 rounded-full bg-white/90 p-2 shadow-sm"
+          animate={isLoading ? { x: [0, 6, -4, 6, 0] } : { x: 0 }}
+          transition={
+            isLoading
+              ? { repeat: Infinity, duration: 2.2, ease: "easeInOut" }
+              : { duration: 0.2 }
+          }
+        >
           <svg viewBox="0 0 120 120" className="h-full w-full">
             <defs>
               <linearGradient id="hedge" x1="0" y1="0" x2="1" y2="1">
@@ -132,21 +141,37 @@ export default function HedgehogBubble({ opinionInput }: HedgehogBubbleProps) {
               strokeWidth="6"
               strokeLinecap="round"
             />
-            <circle cx="95" cy="85" r="8" fill="#e0f2fe" />
-            <path
-              d="M95 82v8"
-              stroke="#1e3a8a"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M92 86h6"
-              stroke="#1e3a8a"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            {isLoading ? (
+              <>
+                <circle cx="92" cy="30" r="10" fill="#e2e8f0" />
+                <circle cx="104" cy="20" r="6" fill="#e2e8f0" />
+                <circle cx="112" cy="12" r="4" fill="#e2e8f0" />
+                <path
+                  d="M88 30h8M92 26v8"
+                  stroke="#334155"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </>
+            ) : (
+              <>
+                <circle cx="95" cy="85" r="8" fill="#e0f2fe" />
+                <path
+                  d="M95 82v8"
+                  stroke="#1e3a8a"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M92 86h6"
+                  stroke="#1e3a8a"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </>
+            )}
           </svg>
-        </div>
+        </motion.div>
         <div>
           <p className="text-sm font-bold text-[#1a1c24]">{comment.title}</p>
           <p className="mt-2 text-sm text-[#334155]">

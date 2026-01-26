@@ -156,22 +156,46 @@ export async function POST(request: Request) {
       measurements: points,
     };
 
+    const requestBody = {
+      model: "gpt-5-mini",
+      max_output_tokens: 220,
+      reasoning: { effort: "medium" },
+      instructions:
+        "너는 소아 성장전문가다. 제공된 데이터만 사용해서 보호자에게 전달하듯 짧고 정확하게 한국어로 설명한다. 진단이나 단정 대신 관찰과 다음 확인 포인트를 제안한다. 2~4문장으로 작성하고, 반드시 JSON 형식으로만 응답한다.",
+      input: `다음 성장 기록을 분석해 주세요. JSON 형식: {\"title\":\"...\",\"message\":\"...\",\"severity\":\"calm|watch|encourage\"}. 데이터: ${JSON.stringify(
+        promptPayload
+      )}`,
+      text: {
+        format: {
+          type: "json_schema",
+          json_schema: {
+            name: "growth_opinion",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                title: { type: "string" },
+                message: { type: "string" },
+                severity: {
+                  type: "string",
+                  enum: ["calm", "watch", "encourage"],
+                },
+              },
+              required: ["title", "message", "severity"],
+            },
+          },
+        },
+      },
+    };
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "gpt-5-mini",
-        max_output_tokens: 220,
-        instructions:
-          "너는 소아 성장전문가다. 제공된 데이터만 사용해서 보호자에게 전달하듯 짧고 정확하게 한국어로 설명한다. 진단이나 단정 대신 관찰과 다음 확인 포인트를 제안한다. 2~4문장으로 작성하고, 반드시 JSON 형식으로만 응답한다.",
-        input: `다음 성장 기록을 분석해 주세요. JSON 형식: {\"title\":\"...\",\"message\":\"...\",\"severity\":\"calm|watch|encourage\"}. 데이터: ${JSON.stringify(
-          promptPayload
-        )}`,
-        text: { format: { type: "json_object" } },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -189,41 +213,71 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = await response.json();
-    const directOutput =
-      typeof data?.output_text === "string" ? data.output_text : null;
-    const extracted = (() => {
-      const outputs = Array.isArray(data?.output) ? data.output : [];
+    const extractOutput = (payload: any) => {
+      const direct = typeof payload?.output_text === "string" ? payload.output_text : null;
+      const outputs = Array.isArray(payload?.output) ? payload.output : [];
+      let refusal: string | null = null;
+      let extracted: string | null = null;
       for (const item of outputs) {
         const contents = Array.isArray(item?.content) ? item.content : [];
         for (const part of contents) {
           if (part?.type === "output_text" && typeof part.text === "string") {
-            return part.text;
+            extracted = part.text;
           }
           if (part?.type === "refusal" && typeof part.refusal === "string") {
-            return `__REFUSAL__:${part.refusal}`;
+            refusal = part.refusal;
           }
         }
       }
-      return null;
-    })();
+      const outputCount = outputs.length;
+      const outputTypes = outputs
+        .map((item: { type?: string }) => item?.type ?? "unknown")
+        .join(",");
+      return {
+        outputText: direct ?? extracted,
+        refusal,
+        outputCount,
+        outputTypes: outputTypes || "none",
+        status: typeof payload?.status === "string" ? payload.status : null,
+        id: typeof payload?.id === "string" ? payload.id : null,
+      };
+    };
 
-    const outputText = directOutput ?? extracted;
+    let data = await response.json();
+    let extracted = extractOutput(data);
+    let outputText = extracted.outputText;
+
+    if (!outputText && extracted.id) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+        const followUp = await fetch(
+          `https://api.openai.com/v1/responses/${extracted.id}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        if (!followUp.ok) continue;
+        data = await followUp.json();
+        extracted = extractOutput(data);
+        outputText = extracted.outputText;
+        if (outputText) break;
+      }
+    }
+
     if (!outputText) {
-      const outputCount = Array.isArray(data?.output) ? data.output.length : 0;
-      const outputTypes = Array.isArray(data?.output)
-        ? data.output.map((item: { type?: string }) => item?.type ?? "unknown").join(",")
-        : "none";
+      const status = extracted.status ? `;status=${extracted.status}` : "";
       return NextResponse.json(
         fallbackWithReason(
-          `openai_empty_response:output_count=${outputCount};types=${outputTypes}`
+          `openai_empty_response:output_count=${extracted.outputCount};types=${extracted.outputTypes}${status}`
         )
       );
     }
-    if (outputText.startsWith("__REFUSAL__:")) {
-      return NextResponse.json(
-        fallbackWithReason(`openai_refusal:${outputText.replace("__REFUSAL__:", "")}`)
-      );
+    if (extracted.refusal) {
+      return NextResponse.json(fallbackWithReason(`openai_refusal:${extracted.refusal}`));
     }
 
     let parsed: OpinionResult;
