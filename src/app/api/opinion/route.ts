@@ -190,7 +190,9 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
-    const outputText = (() => {
+    const directOutput =
+      typeof data?.output_text === "string" ? data.output_text : null;
+    const extracted = (() => {
       const outputs = Array.isArray(data?.output) ? data.output : [];
       for (const item of outputs) {
         const contents = Array.isArray(item?.content) ? item.content : [];
@@ -198,12 +200,25 @@ export async function POST(request: Request) {
           if (part?.type === "output_text" && typeof part.text === "string") {
             return part.text;
           }
+          if (part?.type === "refusal" && typeof part.refusal === "string") {
+            return `__REFUSAL__:${part.refusal}`;
+          }
         }
       }
       return null;
     })();
+
+    const outputText = directOutput ?? extracted;
     if (!outputText) {
-      return NextResponse.json(fallbackWithReason("openai_empty_response"));
+      const outputCount = Array.isArray(data?.output) ? data.output.length : 0;
+      return NextResponse.json(
+        fallbackWithReason(`openai_empty_response:output_count=${outputCount}`)
+      );
+    }
+    if (outputText.startsWith("__REFUSAL__:")) {
+      return NextResponse.json(
+        fallbackWithReason(`openai_refusal:${outputText.replace("__REFUSAL__:", "")}`)
+      );
     }
 
     let parsed: OpinionResult;
