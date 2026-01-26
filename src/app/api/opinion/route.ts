@@ -164,7 +164,6 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: "gpt-5-mini",
-        temperature: 0.4,
         max_completion_tokens: 220,
         response_format: { type: "json_object" },
         messages: [
