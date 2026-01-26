@@ -190,19 +190,7 @@ export default function Page() {
           </div>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-bold">성장/치료 차트</h2>
-              <p className="text-sm text-[#64748b]">
-                치료 기간은 배경 밴드로 표시됩니다.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <GrowthChart measurements={measurements} therapyCourses={therapyCourses} />
-            </CardContent>
-          </Card>
-
+        <div className="grid gap-6">
           <Card>
             <CardHeader>
               <h2 className="text-lg font-bold">데이터 입력</h2>
@@ -304,6 +292,18 @@ export default function Page() {
                   />
                 </TabsContent>
               </Tabs>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-bold">성장/치료 차트</h2>
+              <p className="text-sm text-[#64748b]">
+                치료 기간은 배경 밴드로 표시됩니다.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <GrowthChart measurements={measurements} therapyCourses={therapyCourses} />
             </CardContent>
           </Card>
         </div>
