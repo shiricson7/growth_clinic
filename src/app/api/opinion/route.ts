@@ -156,7 +156,7 @@ export async function POST(request: Request) {
       measurements: points,
     };
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -164,21 +164,13 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: "gpt-5-mini",
-        max_completion_tokens: 220,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "너는 소아 성장전문가다. 제공된 데이터만 사용해서 보호자에게 전달하듯 짧고 정확하게 한국어로 설명한다. 진단이나 단정 대신 관찰과 다음 확인 포인트를 제안한다. 2~4문장으로 작성하고, 반드시 JSON 형식으로만 응답한다.",
-          },
-          {
-            role: "user",
-            content: `다음 성장 기록을 분석해 주세요. JSON 형식: {\"title\":\"...\",\"message\":\"...\",\"severity\":\"calm|watch|encourage\"}. 데이터: ${JSON.stringify(
-              promptPayload
-            )}`,
-          },
-        ],
+        max_output_tokens: 220,
+        instructions:
+          "너는 소아 성장전문가다. 제공된 데이터만 사용해서 보호자에게 전달하듯 짧고 정확하게 한국어로 설명한다. 진단이나 단정 대신 관찰과 다음 확인 포인트를 제안한다. 2~4문장으로 작성하고, 반드시 JSON 형식으로만 응답한다.",
+        input: `다음 성장 기록을 분석해 주세요. JSON 형식: {\"title\":\"...\",\"message\":\"...\",\"severity\":\"calm|watch|encourage\"}. 데이터: ${JSON.stringify(
+          promptPayload
+        )}`,
+        text: { format: { type: "json_object" } },
       }),
     });
 
@@ -198,14 +190,25 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) {
+    const outputText = (() => {
+      const outputs = Array.isArray(data?.output) ? data.output : [];
+      for (const item of outputs) {
+        const contents = Array.isArray(item?.content) ? item.content : [];
+        for (const part of contents) {
+          if (part?.type === "output_text" && typeof part.text === "string") {
+            return part.text;
+          }
+        }
+      }
+      return null;
+    })();
+    if (!outputText) {
       return NextResponse.json(fallbackWithReason("openai_empty_response"));
     }
 
     let parsed: OpinionResult;
     try {
-      parsed = JSON.parse(content) as OpinionResult;
+      parsed = JSON.parse(outputText) as OpinionResult;
     } catch (error) {
       return NextResponse.json(fallbackWithReason("openai_invalid_json"));
     }
