@@ -23,6 +23,104 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const today = new Date().toISOString().slice(0, 10);
+const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+type ParsedMeasurement = {
+  measurement_date: string;
+  height_cm: number | null;
+  weight_kg: number | null;
+};
+
+type CsvParseResult = {
+  rows: ParsedMeasurement[];
+  skipped: number;
+  error?: string;
+};
+
+const splitCsvLine = (line: string) => {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  result.push(current);
+  return result;
+};
+
+const isValidIsoDate = (value: string) => {
+  if (!isoDateRegex.test(value)) return false;
+  return !Number.isNaN(new Date(value).getTime());
+};
+
+const parseMeasurementsCsv = (content: string): CsvParseResult => {
+  const trimmed = content.replace(/^\uFEFF/, "").trim();
+  if (!trimmed) {
+    return { rows: [], skipped: 0, error: "빈 CSV 파일입니다." };
+  }
+  const lines = trimmed.split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (lines.length === 0) {
+    return { rows: [], skipped: 0, error: "CSV 데이터를 찾을 수 없습니다." };
+  }
+
+  let startIndex = 0;
+  let columnIndex = { date: 0, height: 1, weight: 2 };
+  const headerCells = splitCsvLine(lines[0]).map((cell) => cell.trim().toLowerCase());
+  const dateIndex = headerCells.findIndex((cell) => cell === "date" || cell === "measurement_date");
+  const heightIndex = headerCells.findIndex((cell) => cell === "height_cm" || cell === "height");
+  const weightIndex = headerCells.findIndex((cell) => cell === "weight_kg" || cell === "weight");
+  if (dateIndex !== -1 && heightIndex !== -1 && weightIndex !== -1) {
+    columnIndex = { date: dateIndex, height: heightIndex, weight: weightIndex };
+    startIndex = 1;
+  }
+
+  let skipped = 0;
+  const rows: ParsedMeasurement[] = [];
+  for (let i = startIndex; i < lines.length; i += 1) {
+    const line = lines[i];
+    const cells = splitCsvLine(line);
+    const date = (cells[columnIndex.date] ?? "").trim();
+    if (!date || !isValidIsoDate(date)) {
+      skipped += 1;
+      continue;
+    }
+
+    const heightRaw = (cells[columnIndex.height] ?? "").trim();
+    const weightRaw = (cells[columnIndex.weight] ?? "").trim();
+    const height = heightRaw ? Number(heightRaw) : null;
+    const weight = weightRaw ? Number(weightRaw) : null;
+
+    const heightValue = Number.isFinite(height) ? height : null;
+    const weightValue = Number.isFinite(weight) ? weight : null;
+    if (heightValue === null && weightValue === null) {
+      skipped += 1;
+      continue;
+    }
+
+    rows.push({
+      measurement_date: date,
+      height_cm: heightValue,
+      weight_kg: weightValue,
+    });
+  }
+
+  return { rows, skipped };
+};
 
 const defaultChildInfo: ChildInfo = {
   chartNumber: "12345",
@@ -53,6 +151,9 @@ export default function HomeClient() {
   const [percentiles, setPercentiles] = useState({ height: 50, weight: 55 });
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [loadStatus, setLoadStatus] = useState<string>("");
+  const [csvStatus, setCsvStatus] = useState<string>("");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const [chartSuggestions, setChartSuggestions] = useState<
     Array<{ chartNumber: string; name: string; birthDate: string; sex: "male" | "female" }>
   >([]);
@@ -355,6 +456,140 @@ export default function HomeClient() {
     }
   };
 
+  const handleCsvUpload = async () => {
+    if (!session || !supabase) {
+      setCsvStatus("로그인 후 업로드할 수 있어요.");
+      return;
+    }
+    if (!csvFile) {
+      setCsvStatus("CSV 파일을 선택해주세요.");
+      return;
+    }
+    if (!childInfo.chartNumber || !childInfo.name || !childInfo.birthDate || !childInfo.sex) {
+      setCsvStatus("아이 기본 정보를 먼저 입력해주세요.");
+      return;
+    }
+    if (!childInfo.measurementDate || !isValidIsoDate(childInfo.measurementDate)) {
+      setCsvStatus("최근 측정일을 YYYY-MM-DD 형식으로 입력해주세요.");
+      return;
+    }
+
+    setCsvStatus("CSV를 읽는 중...");
+    let content = "";
+    try {
+      content = await csvFile.text();
+    } catch (error) {
+      setCsvStatus("CSV 파일을 읽을 수 없습니다.");
+      return;
+    }
+
+    const parsed = parseMeasurementsCsv(content);
+    if (parsed.error) {
+      setCsvStatus(parsed.error);
+      return;
+    }
+
+    const cutoffDate = childInfo.measurementDate;
+    const beforeCutoff = parsed.rows.filter(
+      (row) => row.measurement_date < cutoffDate
+    );
+    const excludedAfter = parsed.rows.length - beforeCutoff.length;
+
+    let duplicateCount = 0;
+    const uniqueByDate = new Map<string, ParsedMeasurement>();
+    beforeCutoff.forEach((row) => {
+      if (uniqueByDate.has(row.measurement_date)) {
+        duplicateCount += 1;
+      }
+      uniqueByDate.set(row.measurement_date, row);
+    });
+    const uniqueRows = Array.from(uniqueByDate.values());
+
+    if (uniqueRows.length === 0) {
+      setCsvStatus("업로드할 이전 기록이 없습니다.");
+      return;
+    }
+
+    setCsvStatus("환자 정보를 확인하는 중...");
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .upsert(
+        {
+          chart_number: childInfo.chartNumber,
+          name: childInfo.name,
+          birth_date: childInfo.birthDate,
+          sex: childInfo.sex,
+        },
+        { onConflict: "chart_number" }
+      )
+      .select("id")
+      .single();
+
+    if (patientError || !patient) {
+      setCsvStatus(patientError?.message ?? "환자 정보를 저장할 수 없습니다.");
+      return;
+    }
+
+    const payload = uniqueRows.map((row) => ({
+      patient_id: patient.id,
+      measurement_date: row.measurement_date,
+      height_cm: row.height_cm,
+      weight_kg: row.weight_kg,
+    }));
+
+    setCsvStatus("CSV 데이터를 업로드하는 중...");
+    let measurementError: { message?: string } | null = null;
+    const { error: upsertError } = await supabase
+      .from("measurements")
+      .upsert(payload, { onConflict: "patient_id,measurement_date" });
+
+    if (upsertError) {
+      if (upsertError.message?.includes("no unique or exclusion constraint")) {
+        const { error: insertError } = await supabase.from("measurements").insert(payload);
+        if (insertError) {
+          measurementError = insertError;
+        }
+      } else {
+        measurementError = upsertError;
+      }
+    }
+
+    if (measurementError) {
+      setCsvStatus(measurementError.message ?? "CSV 업로드에 실패했어요.");
+      return;
+    }
+
+    setHistory((prev) => {
+      const merged = new Map<string, { measurementDate: string; heightCm: number | null; weightKg: number | null }>();
+      prev.forEach((item) => merged.set(item.measurementDate, item));
+      uniqueRows.forEach((row) => {
+        merged.set(row.measurement_date, {
+          measurementDate: row.measurement_date,
+          heightCm: row.height_cm,
+          weightKg: row.weight_kg,
+        });
+      });
+      return Array.from(merged.values())
+        .sort((a, b) => (a.measurementDate < b.measurementDate ? 1 : -1))
+        .slice(0, 6);
+    });
+
+    const summary = [
+      `${uniqueRows.length}건 업로드`,
+      parsed.skipped ? `${parsed.skipped}건 제외(형식 오류)` : null,
+      excludedAfter ? `${excludedAfter}건 제외(최근 측정일 이후)` : null,
+      duplicateCount ? `${duplicateCount}건 제외(중복 날짜)` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    setCsvStatus(`CSV 업로드 완료! ${summary}`);
+    setCsvFile(null);
+    if (csvInputRef.current) {
+      csvInputRef.current.value = "";
+    }
+  };
+
   const loadPatientByChartNumber = async (chartNumber: string) => {
     if (!session || !supabase) {
       setLoadStatus("로그인 후 불러올 수 있어요.");
@@ -607,6 +842,33 @@ export default function HomeClient() {
                   {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
                   <p className="text-[11px] text-[#94a3b8]">
                     주민등록번호는 저장되지 않습니다.
+                  </p>
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#1a1c24]">이전 측정 기록 CSV 업로드</p>
+                    <span className="text-xs text-[#94a3b8]">최근 측정일 이전</span>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="csvUpload">CSV 파일</Label>
+                    <Input
+                      id="csvUpload"
+                      type="file"
+                      accept=".csv,text/csv"
+                      ref={csvInputRef}
+                      onChange={(e) => {
+                        setCsvFile(e.target.files?.[0] ?? null);
+                        setCsvStatus("");
+                      }}
+                    />
+                  </div>
+                  <Button variant="outline" onClick={handleCsvUpload}>
+                    CSV 업로드
+                  </Button>
+                  {csvStatus && <p className="text-xs text-[#64748b]">{csvStatus}</p>}
+                  <p className="text-[11px] text-[#94a3b8]">
+                    date, height_cm, weight_kg 컬럼(헤더 포함/미포함 가능)만 처리합니다.
                   </p>
                 </div>
 
