@@ -163,7 +163,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "chatgpt-5-nano",
+        model: "gpt-5-mini",
         temperature: 0.4,
         max_completion_tokens: 220,
         response_format: { type: "json_object" },
