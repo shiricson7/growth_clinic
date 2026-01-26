@@ -17,6 +17,7 @@ type OpinionResult = {
   title: string;
   message: string;
   severity: "calm" | "watch" | "encourage";
+  debugReason?: string;
 };
 
 const FALLBACK: OpinionResult = {
@@ -25,6 +26,11 @@ const FALLBACK: OpinionResult = {
     "현재 입력된 성장 기록을 바탕으로 분석 중입니다. 추적 가능한 기록이 더 쌓이면 더 정확한 의견을 드릴게요.",
   severity: "calm",
 };
+
+const fallbackWithReason = (reason: string) => ({
+  ...FALLBACK,
+  debugReason: reason,
+});
 
 function parseNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null;
@@ -91,17 +97,17 @@ export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "API key missing" }, { status: 500 });
+      return NextResponse.json(fallbackWithReason("api_key_missing"), { status: 500 });
     }
 
     const body = (await request.json()) as OpinionRequest;
     if (!body?.birthDate || !Array.isArray(body.measurements)) {
-      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      return NextResponse.json(fallbackWithReason("invalid_payload"), { status: 400 });
     }
 
     const points = sanitizeMeasurements(body.birthDate, body.measurements);
     if (points.length === 0) {
-      return NextResponse.json(FALLBACK);
+      return NextResponse.json(fallbackWithReason("no_measurements"));
     }
 
     const latest = points[points.length - 1];
@@ -178,22 +184,29 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json(FALLBACK);
+      return NextResponse.json(
+        fallbackWithReason(`openai_http_${response.status}`)
+      );
     }
 
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
     if (!content) {
-      return NextResponse.json(FALLBACK);
+      return NextResponse.json(fallbackWithReason("openai_empty_response"));
     }
 
-    const parsed = JSON.parse(content) as OpinionResult;
+    let parsed: OpinionResult;
+    try {
+      parsed = JSON.parse(content) as OpinionResult;
+    } catch (error) {
+      return NextResponse.json(fallbackWithReason("openai_invalid_json"));
+    }
     if (!parsed?.title || !parsed?.message || !parsed?.severity) {
-      return NextResponse.json(FALLBACK);
+      return NextResponse.json(fallbackWithReason("openai_invalid_fields"));
     }
 
     return NextResponse.json(parsed);
   } catch (error) {
-    return NextResponse.json(FALLBACK);
+    return NextResponse.json(fallbackWithReason("exception"));
   }
 }

@@ -16,6 +16,7 @@ type OpinionResult = {
   title: string;
   message: string;
   severity: "calm" | "watch" | "encourage";
+  debugReason?: string;
 };
 
 interface HedgehogBubbleProps {
@@ -67,7 +68,7 @@ export default function HedgehogBubble({ opinionInput }: HedgehogBubbleProps) {
         const data = (await response.json()) as OpinionResult;
         if (data?.title && data?.message && data?.severity) {
           setComment(data);
-          setStatus("idle");
+          setStatus(data.debugReason ? "error" : "idle");
           return;
         }
         throw new Error("Invalid response");
@@ -153,6 +154,11 @@ export default function HedgehogBubble({ opinionInput }: HedgehogBubbleProps) {
               ? "소아 성장전문가 의견을 분석 중이에요..."
               : comment.message}
           </p>
+          {comment.debugReason && (
+            <p className="mt-2 text-[11px] text-[#94a3b8]">
+              실패 원인: {comment.debugReason}
+            </p>
+          )}
         </div>
       </div>
     </motion.div>
