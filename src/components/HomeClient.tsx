@@ -462,6 +462,7 @@ export default function HomeClient() {
   };
 
   const resolvePatientId = async () => {
+    if (!supabase) return null;
     if (patientId) return patientId;
     const chartNumber = childInfo.chartNumber.trim();
     if (!chartNumber) return null;
