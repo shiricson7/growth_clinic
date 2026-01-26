@@ -158,6 +158,8 @@ export default function HomeClient() {
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [patientId, setPatientId] = useState<string | null>(null);
   const [showMeasurementDate, setShowMeasurementDate] = useState(true);
+  const [heightLocked, setHeightLocked] = useState(false);
+  const [weightLocked, setWeightLocked] = useState(false);
   const [chartSuggestions, setChartSuggestions] = useState<
     Array<{ chartNumber: string; name: string; birthDate: string; sex: "male" | "female" }>
   >([]);
@@ -359,6 +361,12 @@ export default function HomeClient() {
       setHistory([]);
       setPatientId(null);
     }
+    if (field === "heightCm") {
+      setHeightLocked(value.trim() !== "");
+    }
+    if (field === "weightKg") {
+      setWeightLocked(value.trim() !== "");
+    }
     if (field === "heightCm" && value) {
       setPercentiles((prev) => ({
         ...prev,
@@ -406,9 +414,11 @@ export default function HomeClient() {
     if (metric === "height") {
       const newValue = valueAtPercentile("height", sexCode, effectiveAge, value);
       setChildInfo((prev) => ({ ...prev, heightCm: newValue.toFixed(1) }));
+      setHeightLocked(false);
     } else {
       const newValue = valueAtPercentile("weight", sexCode, effectiveAge, value);
       setChildInfo((prev) => ({ ...prev, weightKg: newValue.toFixed(1) }));
+      setWeightLocked(false);
     }
   };
 
@@ -460,12 +470,14 @@ export default function HomeClient() {
           weightKg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
         };
         const filtered = prev.filter((item) => item.measurementDate !== entry.measurementDate);
-        return [entry, ...filtered]
-          .sort((a, b) => (a.measurementDate < b.measurementDate ? 1 : -1))
-          .slice(0, 6);
+        return [entry, ...filtered].sort((a, b) =>
+          a.measurementDate < b.measurementDate ? 1 : -1
+        );
       });
 
       setSaveStatus("저장 완료! (RRN은 저장하지 않았어요)");
+      setHeightLocked(Boolean(childInfo.heightCm));
+      setWeightLocked(Boolean(childInfo.weightKg));
     } catch (error) {
       setSaveStatus("저장 중 오류가 발생했어요.");
     }
@@ -600,9 +612,9 @@ export default function HomeClient() {
           weightKg: row.weight_kg,
         });
       });
-      return Array.from(merged.values())
-        .sort((a, b) => (a.measurementDate < b.measurementDate ? 1 : -1))
-        .slice(0, 6);
+      return Array.from(merged.values()).sort((a, b) =>
+        a.measurementDate < b.measurementDate ? 1 : -1
+      );
     });
 
     const summary = [
@@ -630,6 +642,8 @@ export default function HomeClient() {
           ? latestRow.weight_kg.toString()
           : prev.weightKg,
     }));
+    setHeightLocked(typeof latestRow.height_cm === "number");
+    setWeightLocked(typeof latestRow.weight_kg === "number");
     setPercentiles((prev) => ({
       ...prev,
       height:
@@ -704,8 +718,7 @@ export default function HomeClient() {
       .from("measurements")
       .select("measurement_date, height_cm, weight_kg")
       .eq("patient_id", patient.id)
-      .order("measurement_date", { ascending: false })
-      .limit(6);
+      .order("measurement_date", { ascending: false });
 
     if (measurementError) {
       setLoadStatus("측정 기록을 불러오지 못했어요.");
@@ -725,6 +738,8 @@ export default function HomeClient() {
       weightKg: latest?.weight_kg?.toString() ?? prev.weightKg,
       rrn: "",
     }));
+    setHeightLocked(Boolean(latest?.height_cm));
+    setWeightLocked(Boolean(latest?.weight_kg));
 
     setHistory(
       (measurements ?? []).map((item) => ({
@@ -876,6 +891,8 @@ export default function HomeClient() {
                   setHistoryStatus("");
                   setPatientId(null);
                   setShowMeasurementDate(true);
+                  setHeightLocked(false);
+                  setWeightLocked(false);
                 }}
               >
                 로그아웃
@@ -912,6 +929,20 @@ export default function HomeClient() {
                   }}
                 />
 
+                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
+                  <div className="flex flex-wrap gap-3">
+                    <Button onClick={handleSave}>저장</Button>
+                    <Button variant="outline" onClick={() => loadPatientByChartNumber(childInfo.chartNumber)}>
+                      최근 기록 불러오기
+                    </Button>
+                  </div>
+                  {saveStatus && <p className="text-xs text-[#64748b]">{saveStatus}</p>}
+                  {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
+                  <p className="text-[11px] text-[#94a3b8]">
+                    주민등록번호는 저장되지 않습니다.
+                  </p>
+                </div>
+
                 <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-4 shadow-sm backdrop-blur-xl">
                   <div>
                     <p className="text-xs font-semibold text-[#94a3b8]">보기 기준</p>
@@ -941,54 +972,66 @@ export default function HomeClient() {
                   metric={metric}
                   percentile={activePercentile}
                   onChange={handlePercentileChange}
+                  disabled={metric === "height" ? heightLocked : weightLocked}
                 />
-
-                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
-                  <div className="flex flex-wrap gap-3">
-                    <Button onClick={handleSave}>저장</Button>
-                    <Button variant="outline" onClick={() => loadPatientByChartNumber(childInfo.chartNumber)}>
-                      최근 기록 불러오기
-                    </Button>
-                  </div>
-                  {saveStatus && <p className="text-xs text-[#64748b]">{saveStatus}</p>}
-                  {loadStatus && <p className="text-xs text-[#64748b]">{loadStatus}</p>}
-                  <p className="text-[11px] text-[#94a3b8]">
-                    주민등록번호는 저장되지 않습니다.
-                  </p>
-                </div>
 
                 <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-[#1a1c24]">최근 측정 기록</p>
-                    <span className="text-xs text-[#94a3b8]">최대 6회</span>
+                    <span className="text-xs text-[#94a3b8]">전체</span>
                   </div>
                   {history.length === 0 ? (
                     <p className="text-xs text-[#94a3b8]">아직 저장된 기록이 없어요.</p>
                   ) : (
                     <ul className="space-y-2">
-                      {history.map((item) => (
-                        <li
-                          key={item.measurementDate}
-                          className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs text-[#475569]"
-                        >
-                          <span>{item.measurementDate}</span>
-                          <div className="flex items-center gap-3">
-                            <span>
-                              {item.heightCm ? `${item.heightCm}cm` : "-"} ·{" "}
-                              {item.weightKg ? `${item.weightKg}kg` : "-"}
-                            </span>
-                            {item.measurementDate !== childInfo.measurementDate && (
-                              <button
-                                type="button"
-                                className="rounded-full border border-white/80 px-2 py-1 text-[10px] font-semibold text-[#475569] hover:bg-white"
-                                onClick={() => handleDeleteHistory(item.measurementDate)}
-                              >
-                                삭제
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      ))}
+                      {history.map((item) => {
+                        const ageForItem = childInfo.birthDate
+                          ? getAgeMonths(childInfo.birthDate, item.measurementDate)
+                          : null;
+                        const heightPercentile =
+                          ageForItem !== null && item.heightCm !== null
+                            ? percentileFromValue("height", sexCode, ageForItem, item.heightCm)
+                            : null;
+                        const weightPercentile =
+                          ageForItem !== null && item.weightKg !== null
+                            ? percentileFromValue("weight", sexCode, ageForItem, item.weightKg)
+                            : null;
+
+                        return (
+                          <li
+                            key={item.measurementDate}
+                            className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs text-[#475569]"
+                          >
+                            <div className="flex flex-col">
+                              <span>{item.measurementDate}</span>
+                              <span className="text-[10px] text-[#94a3b8]">
+                                {heightPercentile !== null
+                                  ? `키 P${heightPercentile}`
+                                  : "키 -"}{" "}
+                                ·{" "}
+                                {weightPercentile !== null
+                                  ? `몸무게 P${weightPercentile}`
+                                  : "몸무게 -"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span>
+                                {item.heightCm ? `${item.heightCm}cm` : "-"} ·{" "}
+                                {item.weightKg ? `${item.weightKg}kg` : "-"}
+                              </span>
+                              {item.measurementDate !== childInfo.measurementDate && (
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-white/80 px-2 py-1 text-[10px] font-semibold text-[#475569] hover:bg-white"
+                                  onClick={() => handleDeleteHistory(item.measurementDate)}
+                                >
+                                  삭제
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                   {historyStatus && <p className="text-xs text-[#64748b]">{historyStatus}</p>}

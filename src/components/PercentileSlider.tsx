@@ -7,6 +7,7 @@ interface PercentileSliderProps {
   metric: Metric;
   percentile: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
 }
 
 const metricLabel: Record<Metric, string> = {
@@ -18,6 +19,7 @@ export default function PercentileSlider({
   metric,
   percentile,
   onChange,
+  disabled = false,
 }: PercentileSliderProps) {
   return (
     <div className="space-y-3 rounded-2xl border border-white/60 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
@@ -36,7 +38,8 @@ export default function PercentileSlider({
           step={0.1}
           value={percentile}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="h-2 w-full appearance-none rounded-full bg-gradient-to-r from-[#c7f3e9] via-[#eadcff] to-[#ffd4c0] focus:outline-none"
+          disabled={disabled}
+          className="h-2 w-full appearance-none rounded-full bg-gradient-to-r from-[#c7f3e9] via-[#eadcff] to-[#ffd4c0] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
         <motion.div
           className="absolute -top-6 left-0"
