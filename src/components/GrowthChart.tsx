@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Metric, ChartPoint, percentileFromValue } from "@/lib/percentileLogic";
+import { Metric, ChartPoint, SexInput, percentileFromValue } from "@/lib/percentileLogic";
 
 const metricTitle: Record<Metric, string> = {
   height: "키 성장 곡선",
@@ -48,9 +48,10 @@ interface GrowthChartProps {
   metric: Metric;
   chartData: ChartPoint[];
   currentAgeMonths: number;
+  sex: SexInput;
 }
 
-export default function GrowthChart({ metric, chartData, currentAgeMonths }: GrowthChartProps) {
+export default function GrowthChart({ metric, chartData, currentAgeMonths, sex }: GrowthChartProps) {
   const maxAge = chartData.length ? chartData[chartData.length - 1].ageMonths : 0;
   const patientAges = chartData
     .filter((point) => typeof point.patient === "number")
@@ -104,7 +105,7 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
                 const value = point.patient ?? point.predicted;
                 const percentile =
                   typeof value === "number"
-                    ? percentileFromValue(metric, point.ageMonths, value)
+                    ? percentileFromValue(metric, sex, point.ageMonths, value)
                     : null;
                 return (
                   <div className="rounded-lg bg-[#1a1c24] px-3 py-2 text-xs text-white shadow-lg">
@@ -144,7 +145,7 @@ export default function GrowthChart({ metric, chartData, currentAgeMonths }: Gro
                   typeof value === "number" ? value : (payload?.patient as number | undefined);
                 if (typeof numericValue !== "number") return null;
                 const ageMonths = payload?.ageMonths ?? 0;
-                const percentile = percentileFromValue(metric, ageMonths, numericValue);
+                const percentile = percentileFromValue(metric, sex, ageMonths, numericValue);
                 const isCurrent = Math.round(ageMonths) === Math.round(currentAgeMonths);
                 const radius = isCurrent ? 6 : 4;
                 return (

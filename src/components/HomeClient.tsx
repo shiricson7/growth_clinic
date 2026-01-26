@@ -15,6 +15,7 @@ import {
   buildChartData,
   getAgeMonths,
   percentileFromValue,
+  toSexCode,
   valueAtPercentile,
 } from "@/lib/percentileLogic";
 import { theme } from "@/styles/theme";
@@ -185,16 +186,17 @@ export default function HomeClient() {
     [childInfo.birthDate, childInfo.measurementDate]
   );
   const effectiveAge = ageMonths || 24;
+  const sexCode = useMemo(() => toSexCode(childInfo.sex), [childInfo.sex]);
 
   const heightValue = useMemo(() => {
     if (childInfo.heightCm) return Number(childInfo.heightCm);
-    return valueAtPercentile("height", effectiveAge, percentiles.height);
-  }, [childInfo.heightCm, effectiveAge, percentiles.height]);
+    return valueAtPercentile("height", sexCode, effectiveAge, percentiles.height);
+  }, [childInfo.heightCm, effectiveAge, percentiles.height, sexCode]);
 
   const weightValue = useMemo(() => {
     if (childInfo.weightKg) return Number(childInfo.weightKg);
-    return valueAtPercentile("weight", effectiveAge, percentiles.weight);
-  }, [childInfo.weightKg, effectiveAge, percentiles.weight]);
+    return valueAtPercentile("weight", sexCode, effectiveAge, percentiles.weight);
+  }, [childInfo.weightKg, effectiveAge, percentiles.weight, sexCode]);
 
   const activePercentile = metric === "height" ? percentiles.height : percentiles.weight;
   const currentValue = metric === "height" ? heightValue : weightValue;
@@ -253,24 +255,32 @@ export default function HomeClient() {
   );
 
   const { chartData } = useMemo(
-    () => buildChartData(metric, effectiveAge, activePercentile, currentValue, chartHistory),
-    [metric, effectiveAge, activePercentile, currentValue, chartHistory]
+    () =>
+      buildChartData(metric, sexCode, effectiveAge, activePercentile, currentValue, chartHistory),
+    [metric, sexCode, effectiveAge, activePercentile, currentValue, chartHistory]
   );
 
   useEffect(() => {
     if (!childInfo.heightCm) {
       setChildInfo((prev) => ({
         ...prev,
-        heightCm: valueAtPercentile("height", effectiveAge, percentiles.height).toFixed(1),
+        heightCm: valueAtPercentile("height", sexCode, effectiveAge, percentiles.height).toFixed(1),
       }));
     }
     if (!childInfo.weightKg) {
       setChildInfo((prev) => ({
         ...prev,
-        weightKg: valueAtPercentile("weight", effectiveAge, percentiles.weight).toFixed(1),
+        weightKg: valueAtPercentile("weight", sexCode, effectiveAge, percentiles.weight).toFixed(1),
       }));
     }
-  }, [effectiveAge, childInfo.heightCm, childInfo.weightKg, percentiles.height, percentiles.weight]);
+  }, [
+    effectiveAge,
+    sexCode,
+    childInfo.heightCm,
+    childInfo.weightKg,
+    percentiles.height,
+    percentiles.weight,
+  ]);
 
   useEffect(() => {
     const token = searchParams.get("share");
@@ -352,13 +362,13 @@ export default function HomeClient() {
     if (field === "heightCm" && value) {
       setPercentiles((prev) => ({
         ...prev,
-        height: percentileFromValue("height", effectiveAge, Number(value)),
+        height: percentileFromValue("height", sexCode, effectiveAge, Number(value)),
       }));
     }
     if (field === "weightKg" && value) {
       setPercentiles((prev) => ({
         ...prev,
-        weight: percentileFromValue("weight", effectiveAge, Number(value)),
+        weight: percentileFromValue("weight", sexCode, effectiveAge, Number(value)),
       }));
     }
   };
@@ -394,10 +404,10 @@ export default function HomeClient() {
   const handlePercentileChange = (value: number) => {
     setPercentiles((prev) => ({ ...prev, [metric]: value }));
     if (metric === "height") {
-      const newValue = valueAtPercentile("height", effectiveAge, value);
+      const newValue = valueAtPercentile("height", sexCode, effectiveAge, value);
       setChildInfo((prev) => ({ ...prev, heightCm: newValue.toFixed(1) }));
     } else {
-      const newValue = valueAtPercentile("weight", effectiveAge, value);
+      const newValue = valueAtPercentile("weight", sexCode, effectiveAge, value);
       setChildInfo((prev) => ({ ...prev, weightKg: newValue.toFixed(1) }));
     }
   };
@@ -624,11 +634,11 @@ export default function HomeClient() {
       ...prev,
       height:
         typeof latestRow.height_cm === "number"
-          ? percentileFromValue("height", latestAge || 24, latestRow.height_cm)
+          ? percentileFromValue("height", sexCode, latestAge || 24, latestRow.height_cm)
           : prev.height,
       weight:
         typeof latestRow.weight_kg === "number"
-          ? percentileFromValue("weight", latestAge || 24, latestRow.weight_kg)
+          ? percentileFromValue("weight", sexCode, latestAge || 24, latestRow.weight_kg)
           : prev.weight,
     }));
 
@@ -732,13 +742,13 @@ export default function HomeClient() {
     if (latest?.height_cm) {
       setPercentiles((prev) => ({
         ...prev,
-        height: percentileFromValue("height", ageForPercentile || 24, latest.height_cm),
+        height: percentileFromValue("height", sexCode, ageForPercentile || 24, latest.height_cm),
       }));
     }
     if (latest?.weight_kg) {
       setPercentiles((prev) => ({
         ...prev,
-        weight: percentileFromValue("weight", ageForPercentile || 24, latest.weight_kg),
+        weight: percentileFromValue("weight", sexCode, ageForPercentile || 24, latest.weight_kg),
       }));
     }
 

@@ -79,7 +79,7 @@ export default function Dashboard({ initialVisits }: DashboardProps) {
                     {/* Center Column */}
                     <div className="lg:col-span-6 flex flex-col gap-6 h-full">
                         <GrowthChart
-                            standards={GROWTH_STANDARDS}
+                            standards={GROWTH_STANDARDS.height}
                             visits={visits}
                             latestHeight={latestVisit.heightCm}
                             latestPercentile={analysis.percentile || 50}

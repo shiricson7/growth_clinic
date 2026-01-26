@@ -83,7 +83,7 @@ const ReportCard = React.forwardRef<HTMLDivElement, ReportCardProps>(
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[2fr,1fr]">
-            <GrowthChart metric={metric} chartData={chartData} currentAgeMonths={ageMonths} />
+            <GrowthChart metric={metric} chartData={chartData} currentAgeMonths={ageMonths} sex={sex} />
             <div className="flex flex-col gap-4">
               <div className="rounded-2xl border border-white/70 bg-white/70 p-4 text-sm text-[#1a1c24]">
                 <p className="text-xs font-semibold uppercase text-[#94a3b8]">현재 백분위</p>

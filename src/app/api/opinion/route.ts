@@ -132,11 +132,11 @@ export async function POST(request: Request) {
 
     const heightPercentile =
       latestHeight && latestHeight.heightCm !== null
-        ? percentileFromValue("height", latestHeight.ageMonths, latestHeight.heightCm)
+        ? percentileFromValue("height", body.sex, latestHeight.ageMonths, latestHeight.heightCm)
         : null;
     const weightPercentile =
       latestWeight && latestWeight.weightKg !== null
-        ? percentileFromValue("weight", latestWeight.ageMonths, latestWeight.weightKg)
+        ? percentileFromValue("weight", body.sex, latestWeight.ageMonths, latestWeight.weightKg)
         : null;
 
     const promptPayload = {
