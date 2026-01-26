@@ -245,9 +245,10 @@ export async function POST(request: Request) {
     let extracted = extractOutput(data);
     let outputText = extracted.outputText;
 
-    if (!outputText && extracted.id) {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+    if (!outputText && extracted.id && extracted.status === "incomplete") {
+      const maxAttempts = 15;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         const followUp = await fetch(
           `https://api.openai.com/v1/responses/${extracted.id}`,
           {
@@ -262,7 +263,7 @@ export async function POST(request: Request) {
         data = await followUp.json();
         extracted = extractOutput(data);
         outputText = extracted.outputText;
-        if (outputText) break;
+        if (outputText || extracted.status !== "incomplete") break;
       }
     }
 
