@@ -41,6 +41,24 @@ const sortTherapies = (items: TherapyCourse[]) =>
     a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0
   );
 
+const normalizeHormoneLevels = (value: unknown): Record<string, string> => {
+  if (!value) return {};
+  if (typeof value === "object") {
+    return value as Record<string, string>;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, string>;
+      }
+    } catch (error) {
+      return {};
+    }
+  }
+  return {};
+};
+
 type ChartSuggestion = {
   chartNumber: string;
   name: string;
@@ -122,6 +140,78 @@ function PageContent() {
     if (!target) return;
     void handleLoadPatient(target);
   }, [hydrated, searchParams, authLoading]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!supabase || !session) return;
+    const chartNumber = patientInfo.chartNumber.trim();
+    if (!chartNumber) return;
+    if (!patientInfo.name || !patientInfo.birthDate || !patientInfo.sex) return;
+    const hormonePayload =
+      patientInfo.hormoneLevels &&
+      typeof patientInfo.hormoneLevels === "object" &&
+      Object.values(patientInfo.hormoneLevels).some(
+        (value) => value && value.trim() !== ""
+      )
+        ? patientInfo.hormoneLevels
+        : null;
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data: patient, error: patientError } = await supabase
+          .from("patients")
+          .upsert(
+            {
+              chart_number: chartNumber,
+              name: patientInfo.name,
+              birth_date: patientInfo.birthDate,
+              sex: patientInfo.sex,
+              bone_age: patientInfo.boneAge || null,
+              hormone_levels: hormonePayload,
+            },
+            { onConflict: "chart_number" }
+          )
+          .select("id")
+          .single();
+
+        if (patientError || !patient) {
+          return;
+        }
+
+        const payload = measurements.map((item) => ({
+          patient_id: patient.id,
+          measurement_date: item.date,
+          height_cm: item.heightCm ?? null,
+          weight_kg: item.weightKg ?? null,
+        }));
+
+        if (payload.length > 0) {
+          const { error: upsertError } = await supabase
+            .from("measurements")
+            .upsert(payload, { onConflict: "patient_id,measurement_date" });
+
+          if (upsertError?.message?.includes("no unique or exclusion constraint")) {
+            await supabase.from("measurements").insert(payload);
+          }
+        }
+      } catch (error) {
+        return;
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [
+    hydrated,
+    supabase,
+    session,
+    patientInfo.chartNumber,
+    patientInfo.name,
+    patientInfo.birthDate,
+    patientInfo.sex,
+    patientInfo.boneAge,
+    patientInfo.hormoneLevels,
+    measurements,
+  ]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -319,6 +409,10 @@ function PageContent() {
       setLoadStatus("차트번호를 입력해주세요.");
       return;
     }
+    setPatientInfo((prev) => ({
+      ...prev,
+      chartNumber: trimmed,
+    }));
     const stored = loadPatientData(trimmed);
     if (stored) {
       setPatientInfo(stored.patientInfo);
@@ -368,10 +462,7 @@ function PageContent() {
       sex: patient.sex ?? "",
       birthDate: patient.birth_date ?? "",
       boneAge: patient.bone_age ?? "",
-      hormoneLevels:
-        patient.hormone_levels && typeof patient.hormone_levels === "object"
-          ? patient.hormone_levels
-          : {},
+      hormoneLevels: normalizeHormoneLevels(patient.hormone_levels),
     });
     setMeasurements(sortMeasurements(mappedMeasurements));
     setTherapyCourses([]);
