@@ -389,7 +389,6 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
                     y2={bandDomain[1]}
                     fill={style.fill}
                     stroke={style.stroke}
-                    isFront
                     label={{
                       value: labelText,
                       position: "insideTopLeft",
