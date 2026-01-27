@@ -92,6 +92,32 @@ export default function PrintPage() {
     return Number.isFinite(months) ? months : null;
   }, [firstMeasurement, latestMeasurement]);
 
+  const hormoneEntries = useMemo(() => {
+    if (typeof patientInfo.hormoneLevels === "string") {
+      const raw = patientInfo.hormoneLevels.trim();
+      return raw ? [{ label: "기타", value: raw }] : [];
+    }
+    const levels = patientInfo.hormoneLevels ?? {};
+    const ordered = [
+      { key: "LH", label: "LH" },
+      { key: "FSH", label: "FSH" },
+      { key: "E2", label: "E2" },
+      { key: "Testosterone", label: "Testosterone" },
+      { key: "TSH", label: "TSH" },
+      { key: "fT4", label: "fT4" },
+      { key: "DHEA", label: "DHEA" },
+      { key: "IGF_BP3", label: "IGF-BP3" },
+      { key: "IGF_1", label: "IGF-1" },
+      { key: "HbA1c", label: "HbA1c" },
+    ];
+    return ordered
+      .map((item) => ({
+        label: item.label,
+        value: levels[item.key as keyof typeof levels],
+      }))
+      .filter((entry) => entry.value && entry.value.trim() !== "");
+  }, [patientInfo.hormoneLevels]);
+
   const heightDelta = useMemo(() => {
     if (!firstMeasurement?.heightCm || !latestMeasurement?.heightCm) return null;
     return Number((latestMeasurement.heightCm - firstMeasurement.heightCm).toFixed(1));
@@ -222,10 +248,17 @@ export default function PrintPage() {
               <p>생년월일: {patientInfo.birthDate || "-"}</p>
               <p>측정 기간: {measurementRange}</p>
               {patientInfo.boneAge && <p>골연령: {patientInfo.boneAge}</p>}
-              {patientInfo.hormoneLevels && (
-                <p className="whitespace-pre-wrap">
-                  호르몬 수치: {patientInfo.hormoneLevels}
-                </p>
+              {hormoneEntries.length > 0 && (
+                <div className="pt-1 text-xs text-[#475569]">
+                  <p className="font-semibold text-[#64748b]">호르몬 수치</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {hormoneEntries.map((entry) => (
+                      <li key={`${entry.label}-${entry.value}`}>
+                        {entry.label}: {entry.value}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           </div>

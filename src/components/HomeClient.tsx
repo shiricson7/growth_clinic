@@ -132,7 +132,12 @@ const defaultChildInfo: ChildInfo = {
   measurementDate: today,
   heightCm: "",
   weightKg: "",
+  boneAge: "",
+  hormoneLevels: {},
 };
+
+const hasHormoneValues = (levels: Record<string, string> | undefined) =>
+  Boolean(levels && Object.values(levels).some((value) => value && value.trim() !== ""));
 
 export default function HomeClient() {
   const searchParams = useSearchParams();
@@ -329,7 +334,7 @@ export default function HomeClient() {
     const handle = setTimeout(async () => {
       const { data, error } = await supabase
         .from("patients")
-        .select("chart_number, name, birth_date, sex")
+        .select("chart_number, name, birth_date, sex, bone_age, hormone_levels")
         .ilike("chart_number", `${query}%`)
         .order("chart_number", { ascending: true })
         .limit(6);
@@ -381,6 +386,17 @@ export default function HomeClient() {
     }
   };
 
+  const handleHormoneChange = (key: string, value: string) => {
+    setIsPristine(false);
+    setChildInfo((prev) => ({
+      ...prev,
+      hormoneLevels: {
+        ...(prev.hormoneLevels ?? {}),
+        [key]: value,
+      },
+    }));
+  };
+
   const handleRrnChange = (value: string) => {
     setIsPristine(false);
     setChildInfo((prev) => ({ ...prev, rrn: value }));
@@ -429,6 +445,9 @@ export default function HomeClient() {
     }
     setSaveStatus("저장 중...");
     try {
+      const hormonePayload = hasHormoneValues(childInfo.hormoneLevels)
+        ? childInfo.hormoneLevels
+        : null;
       const { data: patient, error: patientError } = await supabase
         .from("patients")
         .upsert(
@@ -437,6 +456,8 @@ export default function HomeClient() {
             name: childInfo.name,
             birth_date: childInfo.birthDate,
             sex: childInfo.sex,
+            bone_age: childInfo.boneAge || null,
+            hormone_levels: hormonePayload,
           },
           { onConflict: "chart_number" }
         )
@@ -553,6 +574,9 @@ export default function HomeClient() {
     }
 
     setCsvStatus("환자 정보를 확인하는 중...");
+    const hormonePayload = hasHormoneValues(childInfo.hormoneLevels)
+      ? childInfo.hormoneLevels
+      : null;
     const { data: patient, error: patientError } = await supabase
       .from("patients")
       .upsert(
@@ -561,6 +585,8 @@ export default function HomeClient() {
           name: childInfo.name,
           birth_date: childInfo.birthDate,
           sex: childInfo.sex,
+          bone_age: childInfo.boneAge || null,
+          hormone_levels: hormonePayload,
         },
         { onConflict: "chart_number" }
       )
@@ -705,7 +731,7 @@ export default function HomeClient() {
     setLoadStatus("최근 기록을 불러오는 중...");
     const { data: patient, error: patientError } = await supabase
       .from("patients")
-      .select("id, chart_number, name, birth_date, sex")
+      .select("id, chart_number, name, birth_date, sex, bone_age, hormone_levels")
       .eq("chart_number", chartNumber)
       .single();
 
@@ -733,6 +759,11 @@ export default function HomeClient() {
       name: patient.name,
       birthDate: patient.birth_date,
       sex: patient.sex,
+      boneAge: patient.bone_age ?? prev.boneAge,
+      hormoneLevels:
+        patient.hormone_levels && typeof patient.hormone_levels === "object"
+          ? patient.hormone_levels
+          : prev.hormoneLevels,
       measurementDate: latest?.measurement_date ?? prev.measurementDate,
       heightCm: latest?.height_cm?.toString() ?? prev.heightCm,
       weightKg: latest?.weight_kg?.toString() ?? prev.weightKg,
@@ -908,6 +939,7 @@ export default function HomeClient() {
                   isPristine={isPristine}
                   onFieldChange={handleFieldChange}
                   onRrnChange={handleRrnChange}
+                  onHormoneChange={handleHormoneChange}
                   chartSuggestions={chartSuggestions}
                   isSearching={isSearching}
                   onChartSelect={loadPatientByChartNumber}

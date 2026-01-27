@@ -15,6 +15,19 @@ export type TherapyCourse = {
   note?: string;
 };
 
+export type HormoneLevels = {
+  LH?: string;
+  FSH?: string;
+  E2?: string;
+  Testosterone?: string;
+  TSH?: string;
+  fT4?: string;
+  DHEA?: string;
+  IGF_BP3?: string;
+  IGF_1?: string;
+  HbA1c?: string;
+};
+
 export type PatientInfo = {
   name: string;
   chartNumber: string;
@@ -22,5 +35,5 @@ export type PatientInfo = {
   sex: "male" | "female" | "";
   birthDate: string;
   boneAge?: string;
-  hormoneLevels?: string;
+  hormoneLevels?: HormoneLevels | string;
 };

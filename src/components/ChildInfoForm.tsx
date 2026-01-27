@@ -1,11 +1,12 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { HormoneLevels } from "@/lib/types";
 
 export type ChildInfo = {
   chartNumber: string;
@@ -16,6 +17,8 @@ export type ChildInfo = {
   measurementDate: string;
   heightCm: string;
   weightKg: string;
+  boneAge: string;
+  hormoneLevels: HormoneLevels;
 };
 
 interface ChildInfoFormProps {
@@ -33,6 +36,7 @@ interface ChildInfoFormProps {
   onChartSelect?: (chartNumber: string) => void;
   onFieldChange: (field: keyof ChildInfo, value: string) => void;
   onRrnChange: (value: string) => void;
+  onHormoneChange?: (key: keyof HormoneLevels, value: string) => void;
   csvStatus?: string;
   csvInputRef?: RefObject<HTMLInputElement | null>;
   onCsvFileChange?: (file: File | null) => void;
@@ -59,6 +63,36 @@ export default function ChildInfoForm({
   onShowMeasurementDate,
 }: ChildInfoFormProps) {
   const inputTone = isPristine ? "text-[#94a3b8]" : "";
+  const [showBoneAge, setShowBoneAge] = useState(false);
+  const [showHormoneLevels, setShowHormoneLevels] = useState(false);
+
+  const hormoneFields = useMemo(
+    () => [
+      { key: "LH", label: "LH" },
+      { key: "FSH", label: "FSH" },
+      { key: "E2", label: "E2" },
+      { key: "Testosterone", label: "Testosterone" },
+      { key: "TSH", label: "TSH" },
+      { key: "fT4", label: "fT4" },
+      { key: "DHEA", label: "DHEA" },
+      { key: "IGF_BP3", label: "IGF-BP3" },
+      { key: "IGF_1", label: "IGF-1" },
+      { key: "HbA1c", label: "HbA1c" },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    if (data.boneAge && !showBoneAge) {
+      setShowBoneAge(true);
+    }
+    const hasHormone = Object.values(data.hormoneLevels ?? {}).some(
+      (value) => value && value.trim() !== ""
+    );
+    if (hasHormone && !showHormoneLevels) {
+      setShowHormoneLevels(true);
+    }
+  }, [data.boneAge, data.hormoneLevels, showBoneAge, showHormoneLevels]);
 
   return (
     <Card className="w-full">
@@ -174,6 +208,58 @@ export default function ChildInfoForm({
             </div>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-4 text-sm text-[#64748b]">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[#1a1c24]"
+              checked={showBoneAge}
+              onChange={(event) => setShowBoneAge(event.target.checked)}
+            />
+            골연령 입력
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[#1a1c24]"
+              checked={showHormoneLevels}
+              onChange={(event) => setShowHormoneLevels(event.target.checked)}
+            />
+            ê³¨ì°ë ¹ ìë ¥
+            í¸ë¥´ëª¬ ìì¹ ìë ¥
+        </div>
+        {showBoneAge && (
+          <div className="space-y-2">
+            <Label htmlFor="boneAge">ê³¨ì°ë ¹</Label>
+            <Input
+              id="boneAge"
+              value={data.boneAge}
+              onChange={(e) => onFieldChange("boneAge", e.target.value)}
+              placeholder="ì: 7ì¸ 3ê°ì"
+              className={inputTone}
+            />
+          </div>
+        )}
+        {showHormoneLevels && (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-[#1a1c24]">í¸ë¥´ëª¬ ìì¹</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {hormoneFields.map((field) => (
+                <div key={field.key} className="space-y-1">
+                  <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>
+                  <Input
+                    id={`hormone-${field.key}`}
+                    value={data.hormoneLevels?.[field.key as keyof HormoneLevels] ?? ""}
+                    onChange={(e) => onHormoneChange?.(field.key as keyof HormoneLevels, e.target.value)}
+                    placeholder="ìì¹ ìë ¥"
+                    className={inputTone}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-3 md:col-span-1">

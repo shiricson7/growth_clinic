@@ -192,11 +192,29 @@ export async function POST(request: Request) {
 
     const therapyCourses = normalizeTherapies(body.therapyCourses ?? []);
 
+    let hormonePayload: string | Record<string, string> | null = null;
+    if (typeof body.hormoneLevels === "string") {
+      hormonePayload = body.hormoneLevels.trim() ? body.hormoneLevels.trim() : null;
+    } else if (body.hormoneLevels && typeof body.hormoneLevels === "object") {
+      const mapped: Record<string, string> = {};
+      Object.entries(body.hormoneLevels).forEach(([key, value]) => {
+        if (!value || !value.trim()) return;
+        const label =
+          key === "IGF_BP3"
+            ? "IGF-BP3"
+            : key === "IGF_1"
+            ? "IGF-1"
+            : key;
+        mapped[label] = value.trim();
+      });
+      hormonePayload = Object.keys(mapped).length ? mapped : null;
+    }
+
     const promptPayload = {
       birthDate: body.birthDate,
       sex: body.sex,
       boneAge: body.boneAge ?? null,
-      hormoneLevels: body.hormoneLevels ?? null,
+      hormoneLevels: hormonePayload,
       latest,
       heightPercentile,
       weightPercentile,

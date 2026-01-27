@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { getAgeMonths, percentileFromValue } from "@/lib/percentileLogic";
 
 const sortMeasurements = (items: Measurement[]) =>
@@ -46,11 +45,27 @@ export default function Page() {
     sex: "",
     birthDate: "",
     boneAge: "",
-    hormoneLevels: "",
+    hormoneLevels: {},
   });
   const [hydrated, setHydrated] = useState(false);
   const [showBoneAge, setShowBoneAge] = useState(false);
   const [showHormoneLevels, setShowHormoneLevels] = useState(false);
+
+  const hormoneFields = useMemo(
+    () => [
+      { key: "LH", label: "LH" },
+      { key: "FSH", label: "FSH" },
+      { key: "E2", label: "E2" },
+      { key: "Testosterone", label: "Testosterone" },
+      { key: "TSH", label: "TSH" },
+      { key: "fT4", label: "fT4" },
+      { key: "DHEA", label: "DHEA" },
+      { key: "IGF_BP3", label: "IGF-BP3" },
+      { key: "IGF_1", label: "IGF-1" },
+      { key: "HbA1c", label: "HbA1c" },
+    ],
+    []
+  );
 
   useEffect(() => {
     const storedMeasurements = loadMeasurements();
@@ -69,7 +84,13 @@ export default function Page() {
     if (patientInfo.boneAge && !showBoneAge) {
       setShowBoneAge(true);
     }
-    if (patientInfo.hormoneLevels && !showHormoneLevels) {
+    const hormoneValues =
+      typeof patientInfo.hormoneLevels === "string"
+        ? patientInfo.hormoneLevels.trim()
+        : Object.values(patientInfo.hormoneLevels ?? {}).some(
+            (value) => value && value.trim() !== ""
+          );
+    if (hormoneValues && !showHormoneLevels) {
       setShowHormoneLevels(true);
     }
   }, [hydrated, patientInfo.boneAge, patientInfo.hormoneLevels, showBoneAge, showHormoneLevels]);
@@ -158,7 +179,7 @@ export default function Page() {
       sex: "",
       birthDate: "",
       boneAge: "",
-      hormoneLevels: "",
+      hormoneLevels: {},
     });
     setShowBoneAge(false);
     setShowHormoneLevels(false);
@@ -262,6 +283,11 @@ export default function Page() {
       latestMeasurement.weightKg
     );
   }, [latestMeasurement, latestAgeMonths, patientInfo.sex]);
+
+  const hormoneValues: Record<string, string> =
+    typeof patientInfo.hormoneLevels === "string"
+      ? {}
+      : (patientInfo.hormoneLevels ?? {});
 
   const summaryName = patientInfo.name?.trim() || "아이";
   const heightSummary = latestHeightPercentile !== null
@@ -414,20 +440,31 @@ export default function Page() {
                   </div>
                 )}
                 {showHormoneLevels && (
-                  <div className="mt-3 space-y-2">
-                    <Label htmlFor="hormoneLevels">호르몬 수치</Label>
-                    <Textarea
-                      id="hormoneLevels"
-                      rows={3}
-                      value={patientInfo.hormoneLevels ?? ""}
-                      onChange={(event) =>
-                        setPatientInfo((prev) => ({
-                          ...prev,
-                          hormoneLevels: event.target.value,
-                        }))
-                      }
-                      placeholder="예: 검사명과 수치"
-                    />
+                  <div className="mt-3 space-y-3">
+                    <p className="text-sm font-semibold text-[#1a1c24]">호르몬 수치</p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {hormoneFields.map((field) => (
+                        <div key={field.key} className="space-y-1">
+                          <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>
+                          <Input
+                            id={`hormone-${field.key}`}
+                            value={hormoneValues[field.key as keyof typeof hormoneValues] ?? ""}
+                            onChange={(event) =>
+                              setPatientInfo((prev) => ({
+                                ...prev,
+                                hormoneLevels: {
+                                  ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
+                                    ? prev.hormoneLevels
+                                    : {}),
+                                  [field.key]: event.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="수치 입력"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {patientInfo.birthDate && (

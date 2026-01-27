@@ -11,6 +11,8 @@ type SavePayload = {
   measurementDate: string;
   heightCm?: string | number | null;
   weightKg?: string | number | null;
+  boneAge?: string | null;
+  hormoneLevels?: Record<string, string> | string | null;
 };
 
 function isValidDate(value: string) {
@@ -26,7 +28,17 @@ export async function POST(request: Request) {
     const accessToken = authHeader.replace("Bearer ", "").trim();
 
     const body = (await request.json()) as SavePayload;
-    const { chartNumber, name, birthDate, sex, measurementDate, heightCm, weightKg } = body;
+    const {
+      chartNumber,
+      name,
+      birthDate,
+      sex,
+      measurementDate,
+      heightCm,
+      weightKg,
+      boneAge,
+      hormoneLevels,
+    } = body;
 
     if (!chartNumber || !name || !birthDate || !sex || !measurementDate) {
       return NextResponse.json(
@@ -55,6 +67,8 @@ export async function POST(request: Request) {
           name,
           birth_date: birthDate,
           sex,
+          bone_age: boneAge ?? null,
+          hormone_levels: hormoneLevels ?? null,
         },
         { onConflict: "chart_number" }
       )
@@ -117,7 +131,7 @@ export async function GET(request: Request) {
   }
   const { data: patient, error: patientError } = await supabase
     .from("patients")
-    .select("id, chart_number, name, birth_date, sex")
+    .select("id, chart_number, name, birth_date, sex, bone_age, hormone_levels")
     .eq("chart_number", chartNumber)
     .single();
 
@@ -149,6 +163,8 @@ export async function GET(request: Request) {
       name: patient.name,
       birthDate: patient.birth_date,
       sex: patient.sex,
+      boneAge: patient.bone_age ?? null,
+      hormoneLevels: patient.hormone_levels ?? null,
     },
     measurement: measurement
       ? {
