@@ -98,7 +98,7 @@ export default function GrowthOpinionPanel({
             성장 분석
           </p>
           <p className="text-sm font-semibold text-[#1a1c24]">
-            gpt-5-mini 요약
+            ChatGPT 요약
           </p>
         </div>
         {status === "loading" && (
