@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import {
@@ -10,6 +11,7 @@ import {
   clearGrowthStorage,
   loadPatientInfo,
   savePatientInfo,
+  upsertPatientDirectory,
 } from "@/lib/storage";
 import { buildDemoMeasurements, buildDemoTherapies } from "@/lib/demoData";
 import { deriveRrnInfo, normalizeRrn } from "@/lib/rrn";
@@ -71,6 +73,35 @@ export default function Page() {
     if (!hydrated) return;
     savePatientInfo(patientInfo);
   }, [patientInfo, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const name = patientInfo.name?.trim() ?? "";
+    const chartNumber = patientInfo.chartNumber?.trim() ?? "";
+    const birthDate = patientInfo.birthDate ?? "";
+    const sex = patientInfo.sex;
+    const hasKey = Boolean(chartNumber || (name && birthDate));
+    if (!hasKey) return;
+    if (measurements.length === 0 && therapyCourses.length === 0) return;
+
+    const sorted = [...measurements].sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+    );
+    const lastMeasurementDate = sorted.length ? sorted[sorted.length - 1].date : undefined;
+    const id = chartNumber || `${name}_${birthDate}`;
+
+    upsertPatientDirectory({
+      id,
+      name,
+      chartNumber,
+      birthDate,
+      sex,
+      updatedAt: new Date().toISOString(),
+      measurementCount: measurements.length,
+      therapyCount: therapyCourses.length,
+      lastMeasurementDate,
+    });
+  }, [hydrated, patientInfo, measurements, therapyCourses]);
 
   const handleAddMeasurement = (measurement: Measurement) => {
     setMeasurements((prev) => sortMeasurements([...prev, measurement]));
@@ -238,6 +269,19 @@ export default function Page() {
             <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-2 text-xs text-[#475569]">
               측정 {totalSummary.measurements}건 · 치료 {totalSummary.therapies}건
             </div>
+            <Link href="/patients">
+              <Button variant="outline">환자 리스트</Button>
+            </Link>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.open("/print", "_blank", "noopener,noreferrer");
+                }
+              }}
+            >
+              A4 요약 인쇄
+            </Button>
             <Button variant="outline" onClick={handleReset}>
               Reset demo data
             </Button>

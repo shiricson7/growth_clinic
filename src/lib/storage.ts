@@ -3,6 +3,19 @@ import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 const MEASUREMENTS_KEY = "growth_measurements_v1";
 const THERAPY_KEY = "growth_therapy_courses_v1";
 const PATIENT_KEY = "growth_patient_v1";
+const PATIENT_DIRECTORY_KEY = "growth_patient_directory_v1";
+
+export type PatientDirectoryEntry = {
+  id: string;
+  name: string;
+  chartNumber: string;
+  birthDate: string;
+  sex: PatientInfo["sex"];
+  updatedAt: string;
+  measurementCount: number;
+  therapyCount: number;
+  lastMeasurementDate?: string;
+};
 
 const safeParse = <T>(value: string | null, fallback: T): T => {
   if (!value) return fallback;
@@ -40,6 +53,7 @@ export const clearGrowthStorage = () => {
   window.localStorage.removeItem(MEASUREMENTS_KEY);
   window.localStorage.removeItem(THERAPY_KEY);
   window.localStorage.removeItem(PATIENT_KEY);
+  window.localStorage.removeItem(PATIENT_DIRECTORY_KEY);
 };
 
 export const loadPatientInfo = (): PatientInfo | null => {
@@ -53,4 +67,23 @@ export const loadPatientInfo = (): PatientInfo | null => {
 export const savePatientInfo = (info: PatientInfo) => {
   if (!hasWindow()) return;
   window.localStorage.setItem(PATIENT_KEY, JSON.stringify(info));
+};
+
+export const loadPatientDirectory = (): PatientDirectoryEntry[] => {
+  if (!hasWindow()) return [];
+  return safeParse<PatientDirectoryEntry[]>(
+    window.localStorage.getItem(PATIENT_DIRECTORY_KEY),
+    []
+  );
+};
+
+export const savePatientDirectory = (entries: PatientDirectoryEntry[]) => {
+  if (!hasWindow()) return;
+  window.localStorage.setItem(PATIENT_DIRECTORY_KEY, JSON.stringify(entries));
+};
+
+export const upsertPatientDirectory = (entry: PatientDirectoryEntry) => {
+  const current = loadPatientDirectory();
+  const filtered = current.filter((item) => item.id !== entry.id);
+  savePatientDirectory([entry, ...filtered]);
 };
