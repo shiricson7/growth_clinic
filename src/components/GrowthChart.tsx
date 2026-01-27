@@ -23,13 +23,13 @@ import { toTimestamp } from "@/lib/date";
 
 const bandStyles: Record<"GH" | "GNRH", { fill: string; stroke: string; label: string }> = {
   GH: {
-    fill: "rgba(96,165,250,0.18)",
-    stroke: "rgba(59,130,246,0.4)",
+    fill: "rgba(59,130,246,0.28)",
+    stroke: "rgba(59,130,246,0.65)",
     label: "GH",
   },
   GNRH: {
-    fill: "rgba(253,186,116,0.2)",
-    stroke: "rgba(251,146,60,0.4)",
+    fill: "rgba(251,146,60,0.26)",
+    stroke: "rgba(251,146,60,0.6)",
     label: "GnRH",
   },
 };
@@ -287,6 +287,8 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
 
   const leftDomain = buildDomain(allValues.length ? allValues : heightValues);
   const rightDomain = buildDomain(weightValues);
+  const bandAxisId = hasHeight ? "left" : "right";
+  const bandDomain = hasHeight ? leftDomain : rightDomain;
 
   const minDate = chartData.length ? chartData[0].date : Date.now();
   const maxDate = chartData.length ? chartData[chartData.length - 1].date : Date.now();
@@ -367,9 +369,9 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
                     key={course.id}
                     x1={course.start}
                     x2={course.end}
-                    yAxisId="left"
-                    y1={leftDomain[0]}
-                    y2={leftDomain[1]}
+                    yAxisId={bandAxisId}
+                    y1={bandDomain[0]}
+                    y2={bandDomain[1]}
                     fill={style.fill}
                     stroke={style.stroke}
                     label={{
