@@ -225,24 +225,24 @@ export default function ChildInfoForm({
               checked={showHormoneLevels}
               onChange={(event) => setShowHormoneLevels(event.target.checked)}
             />
-            ê³¨ì°ë ¹ ìë ¥
-            í¸ë¥´ëª¬ ìì¹ ìë ¥
+            호르몬 수치 입력
+          </label>
         </div>
         {showBoneAge && (
           <div className="space-y-2">
-            <Label htmlFor="boneAge">ê³¨ì°ë ¹</Label>
+            <Label htmlFor="boneAge">골연령</Label>
             <Input
               id="boneAge"
               value={data.boneAge}
               onChange={(e) => onFieldChange("boneAge", e.target.value)}
-              placeholder="ì: 7ì¸ 3ê°ì"
+              placeholder="예: 7세 3개월"
               className={inputTone}
             />
           </div>
         )}
         {showHormoneLevels && (
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-[#1a1c24]">í¸ë¥´ëª¬ ìì¹</p>
+            <p className="text-sm font-semibold text-[#1a1c24]">호르몬 수치</p>
             <div className="grid gap-3 md:grid-cols-2">
               {hormoneFields.map((field) => (
                 <div key={field.key} className="space-y-1">
@@ -251,7 +251,7 @@ export default function ChildInfoForm({
                     id={`hormone-${field.key}`}
                     value={data.hormoneLevels?.[field.key as keyof HormoneLevels] ?? ""}
                     onChange={(e) => onHormoneChange?.(field.key as keyof HormoneLevels, e.target.value)}
-                    placeholder="ìì¹ ìë ¥"
+                    placeholder="수치 입력"
                     className={inputTone}
                   />
                 </div>
