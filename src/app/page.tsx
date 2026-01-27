@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import {
@@ -38,7 +38,7 @@ const sortTherapies = (items: TherapyCourse[]) =>
     a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0
   );
 
-export default function Page() {
+function PageContent() {
   const searchParams = useSearchParams();
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [therapyCourses, setTherapyCourses] = useState<TherapyCourse[]>([]);
@@ -612,5 +612,13 @@ export default function Page() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <PageContent />
+    </Suspense>
   );
 }
