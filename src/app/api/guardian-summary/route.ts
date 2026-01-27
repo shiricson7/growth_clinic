@@ -22,7 +22,7 @@ type SummaryRequest = {
   measurements: MeasurementInput[];
   therapyCourses?: TherapyCourseInput[];
   boneAge?: string;
-  hormoneLevels?: string;
+  hormoneLevels?: string | Record<string, string>;
 };
 
 type SummaryResult = {
@@ -198,7 +198,7 @@ export async function POST(request: Request) {
     } else if (body.hormoneLevels && typeof body.hormoneLevels === "object") {
       const mapped: Record<string, string> = {};
       Object.entries(body.hormoneLevels).forEach(([key, value]) => {
-        if (!value || !value.trim()) return;
+        if (typeof value !== "string" || !value.trim()) return;
         const label =
           key === "IGF_BP3"
             ? "IGF-BP3"
