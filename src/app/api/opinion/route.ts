@@ -77,6 +77,8 @@ Important rules:
 - Do NOT make definitive medical decisions
 - Base all explanations strictly on the provided data
 - If data is insufficient, clearly state what is missing
+- The last sentence MUST be complete and end with proper Korean punctuation (e.g., "입니다.", "하세요.").
+- Keep the total length concise (about 10–14 lines) to avoid cut-off.
 
 Output format:
 
@@ -238,7 +240,7 @@ export async function POST(request: Request) {
 
     const requestBody = {
       model: "gpt-5-mini",
-      max_output_tokens: 900,
+      max_output_tokens: 1200,
       reasoning: { effort: "minimal" },
       instructions: PROMPT,
       input: JSON.stringify(promptPayload),
