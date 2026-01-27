@@ -21,6 +21,8 @@ type SummaryRequest = {
   sex: "male" | "female" | "";
   measurements: MeasurementInput[];
   therapyCourses?: TherapyCourseInput[];
+  boneAge?: string;
+  hormoneLevels?: string;
 };
 
 type SummaryResult = {
@@ -34,6 +36,9 @@ IMPORTANT:
 - 어려운 의학 용어는 피하고 보호자가 이해하기 쉬운 표현을 사용하세요.
 - 영어는 사용하지 마세요.
 - 분량은 A4 한 장 요약 기준으로 10~14줄 이내로 간결하게 작성하세요.
+
+추가 정보:
+- 골연령이나 호르몬 수치가 제공되면 참고하되, 이해하기 쉬운 말로 설명하세요.
 
 입력된 데이터는 아이의 성장 측정 기록과 치료 기간 정보입니다.
 해야 할 일:
@@ -190,6 +195,8 @@ export async function POST(request: Request) {
     const promptPayload = {
       birthDate: body.birthDate,
       sex: body.sex,
+      boneAge: body.boneAge ?? null,
+      hormoneLevels: body.hormoneLevels ?? null,
       latest,
       heightPercentile,
       weightPercentile,

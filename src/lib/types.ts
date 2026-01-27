@@ -21,4 +21,6 @@ export type PatientInfo = {
   rrn: string;
   sex: "male" | "female" | "";
   birthDate: string;
+  boneAge?: string;
+  hormoneLevels?: string;
 };

@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { getAgeMonths, percentileFromValue } from "@/lib/percentileLogic";
 
 const sortMeasurements = (items: Measurement[]) =>
@@ -44,8 +45,12 @@ export default function Page() {
     rrn: "",
     sex: "",
     birthDate: "",
+    boneAge: "",
+    hormoneLevels: "",
   });
   const [hydrated, setHydrated] = useState(false);
+  const [showBoneAge, setShowBoneAge] = useState(false);
+  const [showHormoneLevels, setShowHormoneLevels] = useState(false);
 
   useEffect(() => {
     const storedMeasurements = loadMeasurements();
@@ -58,6 +63,16 @@ export default function Page() {
     }
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (patientInfo.boneAge && !showBoneAge) {
+      setShowBoneAge(true);
+    }
+    if (patientInfo.hormoneLevels && !showHormoneLevels) {
+      setShowHormoneLevels(true);
+    }
+  }, [hydrated, patientInfo.boneAge, patientInfo.hormoneLevels, showBoneAge, showHormoneLevels]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -142,7 +157,11 @@ export default function Page() {
       rrn: "",
       sex: "",
       birthDate: "",
+      boneAge: "",
+      hormoneLevels: "",
     });
+    setShowBoneAge(false);
+    setShowHormoneLevels(false);
     clearGrowthStorage();
     saveMeasurements(demoMeasurements);
     saveTherapyCourses(demoCourses);
@@ -358,6 +377,59 @@ export default function Page() {
                     <Input id="age" value={ageLabel} readOnly placeholder="자동완성" />
                   </div>
                 </div>
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#475569]">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[#1a1c24]"
+                      checked={showBoneAge}
+                      onChange={(event) => setShowBoneAge(event.target.checked)}
+                    />
+                    골연령 입력
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[#1a1c24]"
+                      checked={showHormoneLevels}
+                      onChange={(event) => setShowHormoneLevels(event.target.checked)}
+                    />
+                    호르몬 수치 입력
+                  </label>
+                </div>
+                {showBoneAge && (
+                  <div className="mt-3 space-y-2">
+                    <Label htmlFor="boneAge">골연령</Label>
+                    <Input
+                      id="boneAge"
+                      value={patientInfo.boneAge ?? ""}
+                      onChange={(event) =>
+                        setPatientInfo((prev) => ({
+                          ...prev,
+                          boneAge: event.target.value,
+                        }))
+                      }
+                      placeholder="예: 7세 3개월"
+                    />
+                  </div>
+                )}
+                {showHormoneLevels && (
+                  <div className="mt-3 space-y-2">
+                    <Label htmlFor="hormoneLevels">호르몬 수치</Label>
+                    <Textarea
+                      id="hormoneLevels"
+                      rows={3}
+                      value={patientInfo.hormoneLevels ?? ""}
+                      onChange={(event) =>
+                        setPatientInfo((prev) => ({
+                          ...prev,
+                          hormoneLevels: event.target.value,
+                        }))
+                      }
+                      placeholder="예: 검사명과 수치"
+                    />
+                  </div>
+                )}
                 {patientInfo.birthDate && (
                   <p className="mt-3 text-xs text-[#94a3b8]">
                     생년월일: {patientInfo.birthDate}

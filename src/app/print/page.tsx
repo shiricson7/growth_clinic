@@ -24,6 +24,8 @@ export default function PrintPage() {
     rrn: "",
     sex: "",
     birthDate: "",
+    boneAge: "",
+    hormoneLevels: "",
   });
   const [summary, setSummary] = useState<SummaryResponse>({
     text: "요약을 생성 중입니다.",
@@ -104,6 +106,8 @@ export default function PrintPage() {
     () => ({
       birthDate: patientInfo.birthDate,
       sex: patientInfo.sex,
+      boneAge: patientInfo.boneAge ?? null,
+      hormoneLevels: patientInfo.hormoneLevels ?? null,
       measurements: sortedMeasurements.map((item) => ({
         measurementDate: item.date,
         heightCm: item.heightCm ?? null,
@@ -161,7 +165,7 @@ export default function PrintPage() {
   }, [payloadKey, payload.birthDate, payload.measurements.length]);
 
   return (
-    <main className="min-h-screen bg-[#f1f5f9] px-4 py-6 print:bg-white print:px-0 print:py-0">
+    <main className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-white to-[#e2e8f0] px-4 py-6 print:bg-white print:px-0 print:py-0">
       <style jsx global>{`
         @page {
           size: A4;
@@ -175,7 +179,9 @@ export default function PrintPage() {
         }
       `}</style>
 
-      <div className="mx-auto w-full max-w-[210mm] rounded-3xl bg-white px-8 py-8 shadow-lg print:rounded-none print:shadow-none">
+      <div className="relative mx-auto w-full max-w-[210mm] rounded-[32px] bg-white/90 px-8 py-8 shadow-[0_30px_80px_rgba(15,23,42,0.12)] ring-1 ring-[#e2e8f0] backdrop-blur-sm print:rounded-none print:bg-white print:shadow-none print:ring-0">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-40 w-40 rounded-full bg-gradient-to-br from-[#dbeafe] via-[#e9d5ff] to-[#fde68a] opacity-50 blur-2xl print:hidden" />
+        <div className="pointer-events-none absolute -left-16 top-28 h-32 w-32 rounded-full bg-gradient-to-br from-[#bbf7d0] to-[#bfdbfe] opacity-40 blur-2xl print:hidden" />
         <div className="mb-6 flex items-center justify-between gap-3 print:hidden">
           <Link
             href="/"
@@ -192,26 +198,38 @@ export default function PrintPage() {
           </button>
         </div>
 
-        <header className="border-b border-[#e2e8f0] pb-4">
+        <header className="relative border-b border-[#e2e8f0] pb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#94a3b8]">
             성장 요약
           </p>
-          <h1 className="mt-2 text-2xl font-bold text-[#0f172a]">
-            보호자용 성장 요약 리포트
-          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold text-[#0f172a]">성장 요약 리포트</h1>
+            <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-[#4338ca]">
+              보호자용
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-[#64748b]">
+            최근 성장 흐름을 한 장으로 정리했습니다.
+          </p>
         </header>
 
-        <section className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+        <section className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
             <p className="text-xs font-semibold text-[#94a3b8]">아이 정보</p>
             <div className="mt-2 space-y-1 text-sm text-[#1f2937]">
               <p>이름: {patientInfo.name || "미입력"}</p>
               <p>성별: {formatSex(patientInfo.sex)}</p>
               <p>생년월일: {patientInfo.birthDate || "-"}</p>
               <p>측정 기간: {measurementRange}</p>
+              {patientInfo.boneAge && <p>골연령: {patientInfo.boneAge}</p>}
+              {patientInfo.hormoneLevels && (
+                <p className="whitespace-pre-wrap">
+                  호르몬 수치: {patientInfo.hormoneLevels}
+                </p>
+              )}
             </div>
           </div>
-          <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
             <p className="text-xs font-semibold text-[#94a3b8]">최근 측정 요약</p>
             {latestMeasurement ? (
               <div className="mt-2 space-y-1 text-sm text-[#1f2937]">
@@ -236,7 +254,7 @@ export default function PrintPage() {
         </section>
 
         <section className="mt-4 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm">
             <p className="text-xs font-semibold text-[#94a3b8]">변화 요약</p>
             <div className="mt-2 space-y-1 text-sm text-[#1f2937]">
               <p>
@@ -250,24 +268,30 @@ export default function PrintPage() {
               </p>
             </div>
           </div>
-          <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm">
             <p className="text-xs font-semibold text-[#94a3b8]">치료 기간</p>
             {therapyCourses.length === 0 ? (
               <p className="mt-2 text-sm text-[#64748b]">기록된 치료가 없습니다.</p>
             ) : (
               <ul className="mt-2 space-y-1 text-sm text-[#1f2937]">
-                {therapyCourses.map((course) => (
-                  <li key={course.id}>
-                    {course.drug} · {course.startDate}
-                    {course.endDate ? ` ~ ${course.endDate}` : " (진행 중)"}
-                  </li>
-                ))}
+                {therapyCourses.map((course) => {
+                  const doseLabel =
+                    course.drug === "GH" && course.doseNote ? ` (${course.doseNote})` : "";
+                  return (
+                    <li key={course.id}>
+                      {course.drug}
+                      {doseLabel} · {course.startDate}
+                      {course.endDate ? ` ~ ${course.endDate}` : " (진행 중)"}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-[#e2e8f0] bg-white p-5">
+        <section className="relative mt-6 overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white via-white to-[#f8fafc] p-5 shadow-sm">
+          <div className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-[#818cf8] via-[#60a5fa] to-[#34d399] opacity-70" />
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[#0f172a]">보호자 설명 요약</p>
             {status === "loading" && (
