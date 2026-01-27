@@ -13,12 +13,15 @@ import {
   loadPatientInfo,
   savePatientInfo,
   upsertPatientDirectory,
+  loadPatientDirectory,
   loadPatientData,
   savePatientData,
 } from "@/lib/storage";
 import { buildDemoMeasurements, buildDemoTherapies } from "@/lib/demoData";
 import { deriveRrnInfo, normalizeRrn } from "@/lib/rrn";
 import { differenceInMonths, parseISO } from "date-fns";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 import GrowthChart from "@/components/GrowthChart";
 import MeasurementsPanel from "@/components/MeasurementsPanel";
 import TherapyPanel from "@/components/TherapyPanel";
@@ -38,8 +41,18 @@ const sortTherapies = (items: TherapyCourse[]) =>
     a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0
   );
 
+type ChartSuggestion = {
+  chartNumber: string;
+  name: string;
+  birthDate: string;
+  sex: PatientInfo["sex"];
+};
+
 function PageContent() {
   const searchParams = useSearchParams();
+  const supabase = useMemo(() => getSupabaseClient(), []);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [therapyCourses, setTherapyCourses] = useState<TherapyCourse[]>([]);
   const [patientInfo, setPatientInfo] = useState<PatientInfo>({
@@ -55,6 +68,8 @@ function PageContent() {
   const [showBoneAge, setShowBoneAge] = useState(false);
   const [showHormoneLevels, setShowHormoneLevels] = useState(false);
   const [loadStatus, setLoadStatus] = useState("");
+  const [chartSuggestions, setChartSuggestions] = useState<ChartSuggestion[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const hormoneFields = useMemo(
     () => [
@@ -73,6 +88,22 @@ function PageContent() {
   );
 
   useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+    setAuthLoading(true);
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, [supabase]);
+
+  useEffect(() => {
     const storedMeasurements = loadMeasurements();
     const storedCourses = loadTherapyCourses();
     const storedPatient = loadPatientInfo();
@@ -86,18 +117,63 @@ function PageContent() {
 
   useEffect(() => {
     if (!hydrated) return;
+    if (authLoading) return;
     const target = searchParams.get("patient");
     if (!target) return;
-    const stored = loadPatientData(target);
-    if (stored) {
-      setPatientInfo(stored.patientInfo);
-      setMeasurements(sortMeasurements(stored.measurements));
-      setTherapyCourses(sortTherapies(stored.therapyCourses));
-      setLoadStatus("환자 데이터를 불러왔어요.");
-    } else {
-      setLoadStatus("해당 차트번호의 저장된 데이터가 없습니다.");
+    void handleLoadPatient(target);
+  }, [hydrated, searchParams, authLoading]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const query = patientInfo.chartNumber.trim();
+    if (query.length < 2) {
+      setChartSuggestions([]);
+      setIsSearching(false);
+      return;
     }
-  }, [hydrated, searchParams]);
+
+    if (supabase && session) {
+      setIsSearching(true);
+      const handle = setTimeout(async () => {
+        const { data, error } = await supabase
+          .from("patients")
+          .select("chart_number, name, birth_date, sex")
+          .ilike("chart_number", `${query}%`)
+          .order("chart_number", { ascending: true })
+          .limit(6);
+
+        if (error) {
+          setChartSuggestions([]);
+          setIsSearching(false);
+          return;
+        }
+
+        setChartSuggestions(
+          (data ?? []).map((item) => ({
+            chartNumber: item.chart_number,
+            name: item.name ?? "",
+            birthDate: item.birth_date ?? "",
+            sex: item.sex ?? "",
+          }))
+        );
+        setIsSearching(false);
+      }, 250);
+
+      return () => clearTimeout(handle);
+    }
+
+    const local = loadPatientDirectory()
+      .filter((item) => item.chartNumber?.startsWith(query))
+      .slice(0, 6)
+      .map((item) => ({
+        chartNumber: item.chartNumber,
+        name: item.name,
+        birthDate: item.birthDate,
+        sex: item.sex,
+      }));
+    setChartSuggestions(local);
+    setIsSearching(false);
+  }, [hydrated, patientInfo.chartNumber, session, supabase]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -237,15 +313,68 @@ function PageContent() {
     return { added, updated, skipped: items.length - added - updated };
   };
 
-  const handleLoadPatient = (key: string) => {
-    const stored = loadPatientData(key);
-    if (!stored) {
+  const handleLoadPatient = async (key: string) => {
+    const trimmed = key.trim();
+    if (!trimmed) {
+      setLoadStatus("차트번호를 입력해주세요.");
+      return;
+    }
+    const stored = loadPatientData(trimmed);
+    if (stored) {
+      setPatientInfo(stored.patientInfo);
+      setMeasurements(sortMeasurements(stored.measurements));
+      setTherapyCourses(sortTherapies(stored.therapyCourses));
+      setLoadStatus("환자 데이터를 불러왔어요.");
+      return;
+    }
+    if (!supabase || !session) {
       setLoadStatus("해당 차트번호의 저장된 데이터가 없습니다.");
       return;
     }
-    setPatientInfo(stored.patientInfo);
-    setMeasurements(sortMeasurements(stored.measurements));
-    setTherapyCourses(sortTherapies(stored.therapyCourses));
+    setLoadStatus("환자 데이터를 불러오는 중...");
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id, chart_number, name, birth_date, sex, bone_age, hormone_levels")
+      .eq("chart_number", trimmed)
+      .single();
+
+    if (patientError || !patient) {
+      setLoadStatus("환자 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    const { data: measurementsData, error: measurementsError } = await supabase
+      .from("measurements")
+      .select("measurement_date, height_cm, weight_kg")
+      .eq("patient_id", patient.id)
+      .order("measurement_date", { ascending: true });
+
+    if (measurementsError) {
+      setLoadStatus("측정 기록을 불러오지 못했어요.");
+      return;
+    }
+
+    const mappedMeasurements: Measurement[] = (measurementsData ?? []).map((item, index) => ({
+      id: `${patient.id}-${item.measurement_date}-${index}`,
+      date: item.measurement_date,
+      heightCm: item.height_cm ?? undefined,
+      weightKg: item.weight_kg ?? undefined,
+    }));
+
+    setPatientInfo({
+      name: patient.name ?? "",
+      chartNumber: patient.chart_number ?? trimmed,
+      rrn: "",
+      sex: patient.sex ?? "",
+      birthDate: patient.birth_date ?? "",
+      boneAge: patient.bone_age ?? "",
+      hormoneLevels:
+        patient.hormone_levels && typeof patient.hormone_levels === "object"
+          ? patient.hormone_levels
+          : {},
+    });
+    setMeasurements(sortMeasurements(mappedMeasurements));
+    setTherapyCourses([]);
     setLoadStatus("환자 데이터를 불러왔어요.");
   };
 
@@ -397,7 +526,7 @@ function PageContent() {
                       placeholder="예: 김지안"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="relative space-y-2">
                     <Label htmlFor="chartNumber">차트번호</Label>
                     <Input
                       id="chartNumber"
@@ -416,26 +545,57 @@ function PageContent() {
                           setLoadStatus("차트번호를 입력해주세요.");
                           return;
                         }
-                        handleLoadPatient(key);
+                        void handleLoadPatient(key);
                       }}
                       placeholder="예: 12345"
+                      autoComplete="off"
                     />
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[#94a3b8]">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const key = patientInfo.chartNumber.trim();
-                          if (!key) {
-                            setLoadStatus("차트번호를 입력해주세요.");
-                            return;
-                          }
-                          handleLoadPatient(key);
-                        }}
-                      >
-                        차트번호로 불러오기
-                      </Button>
-                    </div>
+                    {(isSearching || chartSuggestions.length > 0) && (
+                      <div className="absolute left-0 right-0 top-[72px] z-20 rounded-2xl border border-white/70 bg-white/90 p-2 text-sm shadow-lg backdrop-blur-xl">
+                        {isSearching && (
+                          <p className="px-3 py-2 text-xs text-[#94a3b8]">검색 중...</p>
+                        )}
+                        {!isSearching && chartSuggestions.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-[#94a3b8]">
+                            검색 결과가 없습니다.
+                          </p>
+                        )}
+                        <ul className="space-y-1">
+                          {chartSuggestions.map((item) => (
+                            <li key={`${item.chartNumber}-${item.birthDate}`}>
+                              <button
+                                type="button"
+                                className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-white"
+                                onClick={() => {
+                                  setPatientInfo((prev) => ({
+                                    ...prev,
+                                    chartNumber: item.chartNumber,
+                                  }));
+                                  void handleLoadPatient(item.chartNumber);
+                                  setChartSuggestions([]);
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-[#1a1c24]">
+                                    {item.chartNumber}
+                                  </span>
+                                  <span className="text-xs text-[#94a3b8]">
+                                    {item.sex === "male"
+                                      ? "남아"
+                                      : item.sex === "female"
+                                      ? "여아"
+                                      : "-"}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-[#64748b]">
+                                  {item.name || "미입력"} · {item.birthDate || "-"}
+                                </p>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {loadStatus && <p className="text-xs text-[#94a3b8]">{loadStatus}</p>}
                   </div>
                   <div className="space-y-2 md:col-span-2">
