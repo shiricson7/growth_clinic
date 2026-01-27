@@ -290,9 +290,6 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
   const bandAxisId = hasHeight ? "left" : "right";
   const bandDomain = hasHeight ? leftDomain : rightDomain;
 
-  const minDate = chartData.length ? chartData[0].date : Date.now();
-  const maxDate = chartData.length ? chartData[chartData.length - 1].date : Date.now();
-
   const today = Date.now();
   const normalizedCourses = therapyCourses
     .map((course) => {
@@ -304,7 +301,23 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
         end: end >= start ? end : start,
       };
     })
+    .filter((course) => course.start > 0)
     .sort((a, b) => a.start - b.start);
+
+  const measurementMin = chartData.length ? chartData[0].date : today;
+  const measurementMax = chartData.length ? chartData[chartData.length - 1].date : today;
+  const courseStarts = normalizedCourses.map((course) => course.start);
+  const courseEnds = normalizedCourses.map((course) => course.end);
+  const minDate = courseStarts.length ? Math.min(measurementMin, ...courseStarts) : measurementMin;
+  const maxDate = courseEnds.length ? Math.max(measurementMax, ...courseEnds) : measurementMax;
+
+  const clampCourseRange = (start: number, end: number) => {
+    if (end < minDate || start > maxDate) return null;
+    return {
+      start: Math.max(start, minDate),
+      end: Math.min(end, maxDate),
+    };
+  };
 
   return (
     <div className="h-full w-full rounded-2xl border border-white/60 bg-white/60 p-5 shadow-sm backdrop-blur-xl">
@@ -364,16 +377,19 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
                 const labelText = course.productName
                   ? `${style.label} · ${course.productName}`
                   : `${style.label} 시작`;
+                const clamped = clampCourseRange(course.start, course.end);
+                if (!clamped) return null;
                 return (
                   <ReferenceArea
                     key={course.id}
-                    x1={course.start}
-                    x2={course.end}
+                    x1={clamped.start}
+                    x2={clamped.end}
                     yAxisId={bandAxisId}
                     y1={bandDomain[0]}
                     y2={bandDomain[1]}
                     fill={style.fill}
                     stroke={style.stroke}
+                    isFront
                     label={{
                       value: labelText,
                       position: "insideTopLeft",
@@ -402,13 +418,13 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
                         {formatTooltipDate(data.date)}
                       </p>
                       <p>
-                        ?: {data.height ?? "-"} cm{" "}
+                        키: {data.height ?? "-"} cm{" "}
                         {data.heightPercentile !== null
                           ? `(P${formatPercentileLabel(data.heightPercentile)})`
                           : ""}
                       </p>
                       <p>
-                        ???: {data.weight ?? "-"} kg{" "}
+                        몸무게: {data.weight ?? "-"} kg{" "}
                         {data.weightPercentile !== null
                           ? `(P${formatPercentileLabel(data.weightPercentile)})`
                           : ""}
