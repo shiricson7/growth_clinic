@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import {
   loadMeasurements,
@@ -12,6 +13,8 @@ import {
   loadPatientInfo,
   savePatientInfo,
   upsertPatientDirectory,
+  loadPatientData,
+  savePatientData,
 } from "@/lib/storage";
 import { buildDemoMeasurements, buildDemoTherapies } from "@/lib/demoData";
 import { deriveRrnInfo, normalizeRrn } from "@/lib/rrn";
@@ -36,6 +39,7 @@ const sortTherapies = (items: TherapyCourse[]) =>
   );
 
 export default function Page() {
+  const searchParams = useSearchParams();
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [therapyCourses, setTherapyCourses] = useState<TherapyCourse[]>([]);
   const [patientInfo, setPatientInfo] = useState<PatientInfo>({
@@ -50,6 +54,7 @@ export default function Page() {
   const [hydrated, setHydrated] = useState(false);
   const [showBoneAge, setShowBoneAge] = useState(false);
   const [showHormoneLevels, setShowHormoneLevels] = useState(false);
+  const [loadStatus, setLoadStatus] = useState("");
 
   const hormoneFields = useMemo(
     () => [
@@ -78,6 +83,21 @@ export default function Page() {
     }
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const target = searchParams.get("patient");
+    if (!target) return;
+    const stored = loadPatientData(target);
+    if (stored) {
+      setPatientInfo(stored.patientInfo);
+      setMeasurements(sortMeasurements(stored.measurements));
+      setTherapyCourses(sortTherapies(stored.therapyCourses));
+      setLoadStatus("환자 데이터를 불러왔어요.");
+    } else {
+      setLoadStatus("해당 차트번호의 저장된 데이터가 없습니다.");
+    }
+  }, [hydrated, searchParams]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -136,6 +156,12 @@ export default function Page() {
       measurementCount: measurements.length,
       therapyCount: therapyCourses.length,
       lastMeasurementDate,
+    });
+
+    savePatientData(id, {
+      patientInfo,
+      measurements,
+      therapyCourses,
     });
   }, [hydrated, patientInfo, measurements, therapyCourses]);
 
@@ -209,6 +235,18 @@ export default function Page() {
     });
     setMeasurements(sortMeasurements(Array.from(byDate.values())));
     return { added, updated, skipped: items.length - added - updated };
+  };
+
+  const handleLoadPatient = (key: string) => {
+    const stored = loadPatientData(key);
+    if (!stored) {
+      setLoadStatus("해당 차트번호의 저장된 데이터가 없습니다.");
+      return;
+    }
+    setPatientInfo(stored.patientInfo);
+    setMeasurements(sortMeasurements(stored.measurements));
+    setTherapyCourses(sortTherapies(stored.therapyCourses));
+    setLoadStatus("환자 데이터를 불러왔어요.");
   };
 
   const handleRrnChange = (value: string) => {
@@ -370,8 +408,35 @@ export default function Page() {
                           chartNumber: event.target.value,
                         }))
                       }
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        const key = patientInfo.chartNumber.trim();
+                        if (!key) {
+                          setLoadStatus("차트번호를 입력해주세요.");
+                          return;
+                        }
+                        handleLoadPatient(key);
+                      }}
                       placeholder="예: 12345"
                     />
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[#94a3b8]">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const key = patientInfo.chartNumber.trim();
+                          if (!key) {
+                            setLoadStatus("차트번호를 입력해주세요.");
+                            return;
+                          }
+                          handleLoadPatient(key);
+                        }}
+                      >
+                        차트번호로 불러오기
+                      </Button>
+                    </div>
+                    {loadStatus && <p className="text-xs text-[#94a3b8]">{loadStatus}</p>}
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="rrn">주민등록번호</Label>

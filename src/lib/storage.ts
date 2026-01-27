@@ -4,6 +4,7 @@ const MEASUREMENTS_KEY = "growth_measurements_v1";
 const THERAPY_KEY = "growth_therapy_courses_v1";
 const PATIENT_KEY = "growth_patient_v1";
 const PATIENT_DIRECTORY_KEY = "growth_patient_directory_v1";
+const PATIENT_DATA_PREFIX = "growth_patient_data_v1_";
 
 export type PatientDirectoryEntry = {
   id: string;
@@ -54,6 +55,11 @@ export const clearGrowthStorage = () => {
   window.localStorage.removeItem(THERAPY_KEY);
   window.localStorage.removeItem(PATIENT_KEY);
   window.localStorage.removeItem(PATIENT_DIRECTORY_KEY);
+  Object.keys(window.localStorage).forEach((key) => {
+    if (key.startsWith(PATIENT_DATA_PREFIX)) {
+      window.localStorage.removeItem(key);
+    }
+  });
 };
 
 export const loadPatientInfo = (): PatientInfo | null => {
@@ -86,4 +92,27 @@ export const upsertPatientDirectory = (entry: PatientDirectoryEntry) => {
   const current = loadPatientDirectory();
   const filtered = current.filter((item) => item.id !== entry.id);
   savePatientDirectory([entry, ...filtered]);
+};
+
+export type PatientDataBundle = {
+  patientInfo: PatientInfo;
+  measurements: Measurement[];
+  therapyCourses: TherapyCourse[];
+};
+
+const buildPatientDataKey = (key: string) => `${PATIENT_DATA_PREFIX}${key}`;
+
+export const savePatientData = (key: string, payload: PatientDataBundle) => {
+  if (!hasWindow()) return;
+  if (!key) return;
+  window.localStorage.setItem(buildPatientDataKey(key), JSON.stringify(payload));
+};
+
+export const loadPatientData = (key: string): PatientDataBundle | null => {
+  if (!hasWindow()) return null;
+  if (!key) return null;
+  return safeParse<PatientDataBundle | null>(
+    window.localStorage.getItem(buildPatientDataKey(key)),
+    null
+  );
 };

@@ -171,9 +171,10 @@ export default function PatientsPage() {
                   ) : (
                     <div className="divide-y divide-[#e2e8f0]">
                       {localRows.map((row) => (
-                        <div
+                        <Link
                           key={row.id}
-                          className="flex flex-wrap items-center justify-between gap-4 py-3 text-sm"
+                          href={`/?patient=${encodeURIComponent(row.chartNumber || row.id)}`}
+                          className="flex flex-wrap items-center justify-between gap-4 py-3 text-sm transition hover:bg-[#f1f5f9]/60"
                         >
                           <div className="space-y-1">
                             <p className="text-sm font-semibold text-[#1a1c24]">
@@ -190,7 +191,7 @@ export default function PatientsPage() {
                             </p>
                           </div>
                           <div className="text-xs text-[#94a3b8]">ID {row.id}</div>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   )
@@ -199,9 +200,10 @@ export default function PatientsPage() {
                 ) : (
                   <div className="divide-y divide-[#e2e8f0]">
                     {rows.map((row) => (
-                      <div
+                      <Link
                         key={row.id}
-                        className="flex flex-wrap items-center justify-between gap-4 py-3 text-sm"
+                        href={`/?patient=${encodeURIComponent(row.chart_number)}`}
+                        className="flex flex-wrap items-center justify-between gap-4 py-3 text-sm transition hover:bg-[#f1f5f9]/60"
                       >
                         <div className="space-y-1">
                           <p className="text-sm font-semibold text-[#1a1c24]">
@@ -212,7 +214,7 @@ export default function PatientsPage() {
                           </p>
                         </div>
                         <div className="text-xs text-[#94a3b8]">ID {row.id}</div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
