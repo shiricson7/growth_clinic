@@ -55,6 +55,7 @@ export default function ChildInfoForm({
   onChartSelect,
   onFieldChange,
   onRrnChange,
+  onHormoneChange,
   csvStatus,
   csvInputRef,
   onCsvFileChange,
