@@ -17,11 +17,13 @@ import { differenceInMonths, parseISO } from "date-fns";
 import GrowthChart from "@/components/GrowthChart";
 import MeasurementsPanel from "@/components/MeasurementsPanel";
 import TherapyPanel from "@/components/TherapyPanel";
+import GrowthOpinionPanel from "@/components/GrowthOpinionPanel";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAgeMonths, percentileFromValue } from "@/lib/percentileLogic";
 
 const sortMeasurements = (items: Measurement[]) =>
   [...items].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -167,6 +169,58 @@ export default function Page() {
     [measurements.length, therapyCourses.length]
   );
 
+  const latestMeasurement = useMemo(() => {
+    const sorted = sortMeasurements(measurements);
+    return sorted.length ? sorted[sorted.length - 1] : null;
+  }, [measurements]);
+
+  const latestAgeMonths = useMemo(() => {
+    if (!patientInfo.birthDate || !latestMeasurement?.date) return null;
+    return getAgeMonths(patientInfo.birthDate, latestMeasurement.date);
+  }, [patientInfo.birthDate, latestMeasurement]);
+
+  const latestHeightPercentile = useMemo(() => {
+    if (!patientInfo.sex) return null;
+    if (
+      latestMeasurement?.heightCm === undefined ||
+      latestMeasurement?.heightCm === null ||
+      latestAgeMonths === null
+    ) {
+      return null;
+    }
+    return percentileFromValue(
+      "height",
+      patientInfo.sex,
+      latestAgeMonths,
+      latestMeasurement.heightCm
+    );
+  }, [latestMeasurement, latestAgeMonths, patientInfo.sex]);
+
+  const latestWeightPercentile = useMemo(() => {
+    if (!patientInfo.sex) return null;
+    if (
+      latestMeasurement?.weightKg === undefined ||
+      latestMeasurement?.weightKg === null ||
+      latestAgeMonths === null
+    ) {
+      return null;
+    }
+    return percentileFromValue(
+      "weight",
+      patientInfo.sex,
+      latestAgeMonths,
+      latestMeasurement.weightKg
+    );
+  }, [latestMeasurement, latestAgeMonths, patientInfo.sex]);
+
+  const summaryName = patientInfo.name?.trim() || "아이";
+  const heightSummary = latestHeightPercentile !== null
+    ? `${latestHeightPercentile.toFixed(1)}퍼센타일`
+    : "-";
+  const weightSummary = latestWeightPercentile !== null
+    ? `${latestWeightPercentile.toFixed(1)}퍼센타일`
+    : "-";
+
   return (
     <main className="min-h-screen bg-[#f8fafc] px-5 pb-16 pt-10 text-[#1a1c24]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
@@ -297,13 +351,44 @@ export default function Page() {
 
           <Card>
             <CardHeader>
+              <h2 className="text-lg font-bold">퍼센타일 요약</h2>
+              <p className="text-sm text-[#64748b]">
+                최신 측정값 기준으로 키/몸무게 퍼센타일을 표시합니다.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-5 text-sm text-[#1a1c24] shadow-sm">
+                <p className="text-base font-semibold">
+                  {summaryName}의 키는 {heightSummary}, 몸무게는 {weightSummary}입니다.
+                </p>
+                <p className="mt-2 text-xs text-[#64748b]">
+                  퍼센타일 계산을 위해 생년월일, 성별, 최신 측정값이 필요합니다.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <GrowthOpinionPanel
+            patientInfo={patientInfo}
+            measurements={measurements}
+            therapyCourses={therapyCourses}
+          />
+
+          <Card>
+            <CardHeader>
               <h2 className="text-lg font-bold">성장/치료 차트</h2>
+
               <p className="text-sm text-[#64748b]">
                 치료 기간은 배경 밴드로 표시됩니다.
               </p>
             </CardHeader>
             <CardContent>
-              <GrowthChart measurements={measurements} therapyCourses={therapyCourses} />
+              <GrowthChart
+                measurements={measurements}
+                therapyCourses={therapyCourses}
+                birthDate={patientInfo.birthDate}
+                sex={patientInfo.sex}
+              />
             </CardContent>
           </Card>
         </div>

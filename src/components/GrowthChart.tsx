@@ -16,6 +16,7 @@ import {
   ChartPoint,
   Metric,
   SexInput,
+  getAgeMonths,
   percentileFromValue,
 } from "@/lib/percentileLogic";
 import { toTimestamp } from "@/lib/date";
@@ -75,6 +76,8 @@ interface LegacyGrowthChartProps {
 interface ModernGrowthChartProps {
   measurements: Measurement[];
   therapyCourses: TherapyCourse[];
+  birthDate: string;
+  sex: SexInput;
 }
 
 type GrowthChartProps = LegacyGrowthChartProps | ModernGrowthChartProps;
@@ -239,16 +242,37 @@ function LegacyGrowthChart({ metric, chartData, currentAgeMonths, sex }: LegacyG
   );
 }
 
-function ModernGrowthChart({ measurements, therapyCourses }: ModernGrowthChartProps) {
+function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: ModernGrowthChartProps) {
   const sortedMeasurements = [...measurements].sort((a, b) =>
     a.date < b.date ? -1 : a.date > b.date ? 1 : 0
   );
 
   const chartData = sortedMeasurements.map((measurement) => ({
+    isoDate: measurement.date,
     date: toTimestamp(measurement.date),
     height: measurement.heightCm ?? null,
     weight: measurement.weightKg ?? null,
+    ageMonths: birthDate ? getAgeMonths(birthDate, measurement.date) : null,
   }));
+
+  const chartDataWithPercentiles = chartData.map((item) => {
+    const hasAge = typeof item.ageMonths === "number" && !Number.isNaN(item.ageMonths);
+    const hasSex = sex === "male" || sex === "female" || sex === 1 || sex === 2;
+    const canCompute = hasAge && hasSex;
+    const heightPercentile =
+      canCompute && typeof item.height === "number"
+        ? percentileFromValue("height", sex, item.ageMonths as number, item.height)
+        : null;
+    const weightPercentile =
+      canCompute && typeof item.weight === "number"
+        ? percentileFromValue("weight", sex, item.ageMonths as number, item.weight)
+        : null;
+    return {
+      ...item,
+      heightPercentile,
+      weightPercentile,
+    };
+  });
 
   const heightValues = chartData
     .map((item) => item.height)
@@ -300,7 +324,7 @@ function ModernGrowthChart({ measurements, therapyCourses }: ModernGrowthChartPr
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+            <ComposedChart data={chartDataWithPercentiles} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
               <XAxis
                 dataKey="date"
                 type="number"
@@ -364,16 +388,29 @@ function ModernGrowthChart({ measurements, therapyCourses }: ModernGrowthChartPr
                   if (!active || !payload?.length) return null;
                   const data = payload[0].payload as {
                     date: number;
+                    isoDate: string;
                     height: number | null;
                     weight: number | null;
+                    heightPercentile: number | null;
+                    weightPercentile: number | null;
                   };
                   return (
                     <div className="rounded-lg bg-[#1a1c24] px-3 py-2 text-xs text-white shadow-lg">
                       <p className="text-[11px] text-white/70">
                         {formatTooltipDate(data.date)}
                       </p>
-                      <p>키: {data.height ?? "-"} cm</p>
-                      <p>몸무게: {data.weight ?? "-"} kg</p>
+                      <p>
+                        ?: {data.height ?? "-"} cm{" "}
+                        {data.heightPercentile !== null
+                          ? `(P${formatPercentileLabel(data.heightPercentile)})`
+                          : ""}
+                      </p>
+                      <p>
+                        ???: {data.weight ?? "-"} kg{" "}
+                        {data.weightPercentile !== null
+                          ? `(P${formatPercentileLabel(data.weightPercentile)})`
+                          : ""}
+                      </p>
                     </div>
                   );
                 }}
@@ -386,7 +423,39 @@ function ModernGrowthChart({ measurements, therapyCourses }: ModernGrowthChartPr
                   dataKey="height"
                   stroke="#6366f1"
                   strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#fff", stroke: "#6366f1", strokeWidth: 2 }}
+                  dot={(props) => {
+                    const { cx, cy, payload, value } = props;
+                    if (cx === undefined || cy === undefined) return null;
+                    const numericValue =
+                      typeof value === "number" ? value : (payload?.height as number | undefined);
+                    if (typeof numericValue !== "number") return null;
+                    const percentile =
+                      typeof payload?.heightPercentile === "number" ? payload.heightPercentile : null;
+                    return (
+                      <g>
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={3}
+                          fill="#fff"
+                          stroke="#6366f1"
+                          strokeWidth={2}
+                        />
+                        {percentile !== null && (
+                          <text
+                            x={cx}
+                            y={cy - 10}
+                            textAnchor="middle"
+                            fontSize={10}
+                            fontWeight={600}
+                            fill="#6366f1"
+                          >
+                            P{formatPercentileLabel(percentile)}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  }}
                   connectNulls
                 />
               )}
@@ -397,7 +466,39 @@ function ModernGrowthChart({ measurements, therapyCourses }: ModernGrowthChartPr
                   dataKey="weight"
                   stroke="#f97316"
                   strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#fff", stroke: "#f97316", strokeWidth: 2 }}
+                  dot={(props) => {
+                    const { cx, cy, payload, value } = props;
+                    if (cx === undefined || cy === undefined) return null;
+                    const numericValue =
+                      typeof value === "number" ? value : (payload?.weight as number | undefined);
+                    if (typeof numericValue !== "number") return null;
+                    const percentile =
+                      typeof payload?.weightPercentile === "number" ? payload.weightPercentile : null;
+                    return (
+                      <g>
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={3}
+                          fill="#fff"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                        />
+                        {percentile !== null && (
+                          <text
+                            x={cx}
+                            y={cy + 14}
+                            textAnchor="middle"
+                            fontSize={10}
+                            fontWeight={600}
+                            fill="#f97316"
+                          >
+                            P{formatPercentileLabel(percentile)}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  }}
                   connectNulls
                 />
               )}
@@ -420,5 +521,12 @@ export default function GrowthChart(props: GrowthChartProps) {
   if (isLegacyProps(props)) {
     return <LegacyGrowthChart {...props} />;
   }
-  return <ModernGrowthChart measurements={props.measurements} therapyCourses={props.therapyCourses} />;
+  return (
+    <ModernGrowthChart
+      measurements={props.measurements}
+      therapyCourses={props.therapyCourses}
+      birthDate={props.birthDate}
+      sex={props.sex}
+    />
+  );
 }

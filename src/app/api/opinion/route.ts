@@ -7,28 +7,131 @@ type MeasurementInput = {
   weightKg?: number | null;
 };
 
+type TherapyCourseInput = {
+  drug: "GH" | "GNRH";
+  startDate: string;
+  endDate?: string | null;
+  productName?: string | null;
+  doseNote?: string | null;
+  note?: string | null;
+};
+
 type OpinionRequest = {
   birthDate: string;
   sex: "male" | "female" | "";
   measurements: MeasurementInput[];
+  therapyCourses?: TherapyCourseInput[];
 };
 
 type OpinionResult = {
-  title: string;
-  message: string;
-  severity: "calm" | "watch" | "encourage";
+  text: string;
   debugReason?: string;
 };
 
-const FALLBACK: OpinionResult = {
-  title: "기록을 함께 살펴보세요",
-  message:
-    "현재 입력된 성장 기록을 바탕으로 분석 중입니다. 추적 가능한 기록이 더 쌓이면 더 정확한 의견을 드릴게요.",
-  severity: "calm",
+const PROMPT = `You are a pediatric endocrinologist specializing in growth disorders.
+IMPORTANT:
+- All outputs MUST be written in Korean.
+- Do NOT use English in the output.
+- Use clear, natural Korean suitable for medical reports in Korea.
+
+You are given longitudinal growth data of a child, including:
+- Measurement dates
+- Height (cm)
+- Weight (kg)
+- Optional: growth hormone (GH) treatment start date and duration
+
+Your task is to analyze the data and explain:
+
+1. Overall growth status
+   - Is the child growing appropriately for age?
+   - Is height increasing steadily over time?
+   - Is weight gain appropriate relative to height?
+
+2. Growth velocity
+   - Evaluate height velocity before and after growth hormone treatment (if applicable)
+   - Comment on whether the growth velocity is adequate, improved, or insufficient
+
+3. Effect of growth hormone treatment (if used)
+   - Compare growth pattern before vs after treatment
+   - State whether the response to growth hormone appears good, suboptimal, or unclear
+   - Mention expected patterns of response in early vs later phases of treatment
+
+4. Balance between height and weight
+   - Assess whether weight gain is proportional to height gain
+   - Comment on risks of underweight or overweight if applicable
+
+5. Clinical interpretation
+   - Summarize whether current growth is reassuring or needs closer monitoring
+   - Mention possible reasons if growth response is slower than expected
+   - Clearly state if continuation of current management is reasonable
+
+6. Parent-friendly explanation
+   - Explain the findings in simple, reassuring language
+   - Avoid medical jargon
+   - Use short sentences suitable for parents
+   - Focus on “trend over time” rather than single measurements
+
+Important rules:
+- Do NOT diagnose diseases
+- Do NOT provide medication dosage
+- Do NOT make definitive medical decisions
+- Base all explanations strictly on the provided data
+- If data is insufficient, clearly state what is missing
+
+Output format:
+
+[Doctor’s Summary]
+- (Concise, clinical interpretation in professional tone)
+
+[Growth Trend Analysis]
+- Height trend:
+- Weight trend:
+- Growth velocity:
+
+[Growth Hormone Treatment Assessment] (only if applicable)
+- Pre-treatment growth:
+- Post-treatment growth:
+- Overall response:
+
+[Parent Explanation]
+- (Warm, easy-to-understand explanation in plain language)
+
+Use a calm, professional, and reassuring tone.`;
+
+const buildFallbackText = (hasGh: boolean) => {
+  const sections = [
+    "[Doctor’s Summary]",
+    "- 현재 제공된 정보로는 성장 추이를 일부만 해석할 수 있습니다.",
+    "",
+    "[Growth Trend Analysis]",
+    "- Height trend: 입력된 키 측정값의 변화가 필요합니다.",
+    "- Weight trend: 입력된 몸무게 측정값의 변화가 필요합니다.",
+    "- Growth velocity: 측정 간격과 연속 데이터가 더 필요합니다.",
+  ];
+
+  if (hasGh) {
+    sections.push(
+      "",
+      "[Growth Hormone Treatment Assessment]",
+      "- Pre-treatment growth: 치료 전 데이터가 충분하지 않습니다.",
+      "- Post-treatment growth: 치료 후 데이터가 충분하지 않습니다.",
+      "- Overall response: 현재 정보로는 판단이 어렵습니다."
+    );
+  }
+
+  sections.push(
+    "",
+    "[Parent Explanation]",
+    "- 아직 기록이 적어 성장 흐름을 정확히 보기 어렵습니다.",
+    "- 키와 몸무게를 일정 간격으로 추가 기록해 주세요.",
+    "- 데이터가 모이면 더 명확한 설명을 드릴 수 있습니다."
+  );
+
+  return sections.join("\n");
 };
 
-const fallbackWithReason = (reason: string) => ({
-  ...FALLBACK,
+const fallbackWithReason = (reason: string, hasGh: boolean): OpinionResult => ({
+  text: buildFallbackText(hasGh),
   debugReason: reason,
 });
 
@@ -38,10 +141,7 @@ function parseNumber(value: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-function sanitizeMeasurements(
-  birthDate: string,
-  measurements: MeasurementInput[]
-) {
+function sanitizeMeasurements(birthDate: string, measurements: MeasurementInput[]) {
   return measurements
     .map((item) => {
       const height = parseNumber(item.heightCm);
@@ -66,6 +166,20 @@ function sanitizeMeasurements(
     .sort((a, b) => (a.measurementDate < b.measurementDate ? -1 : 1));
 }
 
+function normalizeTherapies(courses: TherapyCourseInput[] = []) {
+  return courses
+    .filter((course) => course.startDate)
+    .map((course) => ({
+      drug: course.drug,
+      startDate: course.startDate,
+      endDate: course.endDate ?? null,
+      productName: course.productName ?? null,
+      doseNote: course.doseNote ?? null,
+      note: course.note ?? null,
+    }))
+    .sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+}
+
 function pickLatestWithMetric<T extends { heightCm: number | null; weightKg: number | null }>(
   points: T[],
   metric: "heightCm" | "weightKg"
@@ -76,65 +190,30 @@ function pickLatestWithMetric<T extends { heightCm: number | null; weightKg: num
   return null;
 }
 
-function pickPrevWithMetric<T extends { heightCm: number | null; weightKg: number | null }>(
-  points: T[],
-  metric: "heightCm" | "weightKg"
-) {
-  let foundCurrent = false;
-  for (let i = points.length - 1; i >= 0; i -= 1) {
-    if (points[i][metric] !== null) {
-      if (!foundCurrent) {
-        foundCurrent = true;
-      } else {
-        return points[i];
-      }
-    }
-  }
-  return null;
-}
-
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(fallbackWithReason("api_key_missing"), { status: 500 });
+      return NextResponse.json(fallbackWithReason("api_key_missing", false), { status: 500 });
     }
 
     const body = (await request.json()) as OpinionRequest;
+    const hasGh = Array.isArray(body?.therapyCourses)
+      ? body.therapyCourses.some((course) => course.drug === "GH")
+      : false;
+
     if (!body?.birthDate || !Array.isArray(body.measurements)) {
-      return NextResponse.json(fallbackWithReason("invalid_payload"), { status: 400 });
+      return NextResponse.json(fallbackWithReason("invalid_payload", hasGh), { status: 400 });
     }
 
     const points = sanitizeMeasurements(body.birthDate, body.measurements);
     if (points.length === 0) {
-      return NextResponse.json(fallbackWithReason("no_measurements"));
+      return NextResponse.json(fallbackWithReason("no_measurements", hasGh));
     }
 
     const latest = points[points.length - 1];
     const latestHeight = pickLatestWithMetric(points, "heightCm");
-    const prevHeight = pickPrevWithMetric(points, "heightCm");
     const latestWeight = pickLatestWithMetric(points, "weightKg");
-    const prevWeight = pickPrevWithMetric(points, "weightKg");
-
-    const heightDelta =
-      latestHeight && prevHeight
-        ? {
-            deltaCm: Number((latestHeight.heightCm! - prevHeight.heightCm!).toFixed(2)),
-            deltaMonths: Number(
-              (latestHeight.ageMonths - prevHeight.ageMonths).toFixed(1)
-            ),
-          }
-        : null;
-
-    const weightDelta =
-      latestWeight && prevWeight
-        ? {
-            deltaKg: Number((latestWeight.weightKg! - prevWeight.weightKg!).toFixed(2)),
-            deltaMonths: Number(
-              (latestWeight.ageMonths - prevWeight.ageMonths).toFixed(1)
-            ),
-          }
-        : null;
 
     const heightPercentile =
       latestHeight && latestHeight.heightCm !== null
@@ -145,46 +224,24 @@ export async function POST(request: Request) {
         ? percentileFromValue("weight", body.sex, latestWeight.ageMonths, latestWeight.weightKg)
         : null;
 
+    const therapyCourses = normalizeTherapies(body.therapyCourses ?? []);
+
     const promptPayload = {
       birthDate: body.birthDate,
       sex: body.sex,
       latest,
       heightPercentile,
       weightPercentile,
-      heightDelta,
-      weightDelta,
       measurements: points,
+      therapyCourses,
     };
 
     const requestBody = {
       model: "gpt-5-mini",
-      max_output_tokens: 220,
+      max_output_tokens: 900,
       reasoning: { effort: "minimal" },
-      instructions:
-        "너는 소아 성장전문가다. 제공된 데이터만 사용해서 보호자에게 전달하듯 짧고 정확하게 한국어로 설명한다. 진단이나 단정 대신 관찰과 다음 확인 포인트를 제안한다. 2~4문장으로 작성하고, 반드시 JSON 형식으로만 응답한다.",
-      input: `다음 성장 기록을 분석해 주세요. JSON 형식: {\"title\":\"...\",\"message\":\"...\",\"severity\":\"calm|watch|encourage\"}. 데이터: ${JSON.stringify(
-        promptPayload
-      )}`,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "growth_opinion",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              title: { type: "string" },
-              message: { type: "string" },
-              severity: {
-                type: "string",
-                enum: ["calm", "watch", "encourage"],
-              },
-            },
-            required: ["title", "message", "severity"],
-          },
-        },
-      },
+      instructions: PROMPT,
+      input: JSON.stringify(promptPayload),
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -207,7 +264,7 @@ export async function POST(request: Request) {
         detail = "";
       }
       return NextResponse.json(
-        fallbackWithReason(`openai_http_${response.status}${detail}`)
+        fallbackWithReason(`openai_http_${response.status}${detail}`, hasGh)
       );
     }
 
@@ -228,9 +285,7 @@ export async function POST(request: Request) {
         }
       }
       const outputCount = outputs.length;
-      const outputTypes = outputs
-        .map((item: { type?: string }) => item?.type ?? "unknown")
-        .join(",");
+      const outputTypes = outputs.map((item: { type?: string }) => item?.type ?? "unknown").join(",");
       return {
         outputText: direct ?? extracted,
         refusal,
@@ -249,16 +304,13 @@ export async function POST(request: Request) {
       const maxAttempts = 30;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        const followUp = await fetch(
-          `https://api.openai.com/v1/responses/${extracted.id}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const followUp = await fetch(`https://api.openai.com/v1/responses/${extracted.id}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
         if (!followUp.ok) continue;
         data = await followUp.json();
         extracted = extractOutput(data);
@@ -271,26 +323,17 @@ export async function POST(request: Request) {
       const status = extracted.status ? `;status=${extracted.status}` : "";
       return NextResponse.json(
         fallbackWithReason(
-          `openai_empty_response:output_count=${extracted.outputCount};types=${extracted.outputTypes}${status}`
+          `openai_empty_response:output_count=${extracted.outputCount};types=${extracted.outputTypes}${status}`,
+          hasGh
         )
       );
     }
     if (extracted.refusal) {
-      return NextResponse.json(fallbackWithReason(`openai_refusal:${extracted.refusal}`));
+      return NextResponse.json(fallbackWithReason(`openai_refusal:${extracted.refusal}`, hasGh));
     }
 
-    let parsed: OpinionResult;
-    try {
-      parsed = JSON.parse(outputText) as OpinionResult;
-    } catch (error) {
-      return NextResponse.json(fallbackWithReason("openai_invalid_json"));
-    }
-    if (!parsed?.title || !parsed?.message || !parsed?.severity) {
-      return NextResponse.json(fallbackWithReason("openai_invalid_fields"));
-    }
-
-    return NextResponse.json(parsed);
+    return NextResponse.json({ text: outputText });
   } catch (error) {
-    return NextResponse.json(fallbackWithReason("exception"));
+    return NextResponse.json(fallbackWithReason("exception", false));
   }
 }
