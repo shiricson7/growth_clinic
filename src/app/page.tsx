@@ -495,7 +495,7 @@ function PageContent() {
               A4 요약 인쇄
             </Button>
             <Button variant="outline" onClick={handleReset}>
-              Reset demo data
+              초기화
             </Button>
           </div>
         </header>
