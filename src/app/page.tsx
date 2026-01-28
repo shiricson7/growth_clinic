@@ -19,10 +19,10 @@ import {
 } from "@/lib/storage";
 import { buildDemoMeasurements, buildDemoTherapies } from "@/lib/demoData";
 import { deriveRrnInfo, normalizeRrn } from "@/lib/rrn";
-import { differenceInMonths, parseISO } from "date-fns";
+import { addMonths, differenceInMonths, format, parseISO } from "date-fns";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import GrowthChart from "@/components/GrowthChart";
+import GrowthPercentileChart from "@/components/GrowthPercentileChart";
 import MeasurementsPanel from "@/components/MeasurementsPanel";
 import TherapyPanel from "@/components/TherapyPanel";
 import GrowthOpinionPanel from "@/components/GrowthOpinionPanel";
@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getAgeMonths, percentileFromValue } from "@/lib/percentileLogic";
+import { getAgeMonths, percentileFromValue, valueAtPercentile } from "@/lib/percentileLogic";
 
 const sortMeasurements = (items: Measurement[]) =>
   [...items].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -582,6 +582,80 @@ function PageContent() {
     ? `${latestWeightPercentile.toFixed(1)}퍼센타일`
     : "-";
 
+  const heightObserved = useMemo(
+    () =>
+      measurements
+        .filter((item) => typeof item.heightCm === "number")
+        .map((item) => ({ date: item.date, value: item.heightCm as number })),
+    [measurements]
+  );
+
+  const weightObserved = useMemo(
+    () =>
+      measurements
+        .filter((item) => typeof item.weightKg === "number")
+        .map((item) => ({ date: item.date, value: item.weightKg as number })),
+    [measurements]
+  );
+
+  const buildPercentiles = (metric: "height" | "weight") => {
+    if (!patientInfo.birthDate) return [];
+    if (!patientInfo.sex) return [];
+    if (!measurements.length) return [];
+    const sorted = sortMeasurements(measurements);
+    const startDate = sorted[0]?.date;
+    const endDate = sorted[sorted.length - 1]?.date;
+    if (!startDate || !endDate) return [];
+    const start = parseISO(startDate);
+    const end = parseISO(endDate);
+    const totalMonths = Math.max(0, differenceInMonths(end, start));
+    const dates: string[] = [];
+    for (let i = 0; i <= totalMonths; i += 1) {
+      dates.push(format(addMonths(start, i), "yyyy-MM-dd"));
+    }
+    if (dates[dates.length - 1] !== endDate) {
+      dates.push(endDate);
+    }
+    return dates.map((date) => {
+      const ageMonths = getAgeMonths(patientInfo.birthDate, date);
+      return {
+        date,
+        p3: valueAtPercentile(metric, patientInfo.sex, ageMonths, 3),
+        p10: valueAtPercentile(metric, patientInfo.sex, ageMonths, 10),
+        p25: valueAtPercentile(metric, patientInfo.sex, ageMonths, 25),
+        p50: valueAtPercentile(metric, patientInfo.sex, ageMonths, 50),
+        p75: valueAtPercentile(metric, patientInfo.sex, ageMonths, 75),
+        p90: valueAtPercentile(metric, patientInfo.sex, ageMonths, 90),
+        p97: valueAtPercentile(metric, patientInfo.sex, ageMonths, 97),
+      };
+    });
+  };
+
+  const heightPercentiles = useMemo(() => buildPercentiles("height"), [
+    measurements,
+    patientInfo.birthDate,
+    patientInfo.sex,
+  ]);
+
+  const weightPercentiles = useMemo(() => buildPercentiles("weight"), [
+    measurements,
+    patientInfo.birthDate,
+    patientInfo.sex,
+  ]);
+
+  const chartTreatments = useMemo(
+    () =>
+      therapyCourses.map((course) => ({
+        id: course.id,
+        type: course.drug === "GH" ? "GH" : "GnRH",
+        label: course.drug === "GH" ? "Growth Hormone" : "GnRH agonist",
+        startDate: course.startDate,
+        endDate: course.endDate ?? null,
+        note: course.note ?? course.productName ?? undefined,
+      })),
+    [therapyCourses]
+  );
+
   return (
     <main className="min-h-screen bg-[#f8fafc] px-5 pb-16 pt-10 text-[#1a1c24]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
@@ -902,23 +976,29 @@ function PageContent() {
             therapyCourses={therapyCourses}
           />
 
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-bold">성장/치료 차트</h2>
+          <GrowthPercentileChart
+            title="Height Growth"
+            unit="cm"
+            mode="screen"
+            data={{
+              observed: heightObserved,
+              percentiles: heightPercentiles,
+            }}
+            treatments={chartTreatments}
+          />
 
-              <p className="text-sm text-[#64748b]">
-                치료 기간은 배경 밴드로 표시됩니다.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <GrowthChart
-                measurements={measurements}
-                therapyCourses={therapyCourses}
-                birthDate={patientInfo.birthDate}
-                sex={patientInfo.sex}
-              />
-            </CardContent>
-          </Card>
+          {weightObserved.length > 0 && (
+            <GrowthPercentileChart
+              title="Weight Growth"
+              unit="kg"
+              mode="screen"
+              data={{
+                observed: weightObserved,
+                percentiles: weightPercentiles,
+              }}
+              treatments={chartTreatments}
+            />
+          )}
         </div>
       </div>
     </main>
