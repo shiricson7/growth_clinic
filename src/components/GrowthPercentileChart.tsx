@@ -395,7 +395,7 @@ export default function GrowthPercentileChart({
 
   return (
     <div
-      className={`relative w-full rounded-3xl border border-slate-200/70 bg-[#f8fafc] p-5 shadow-sm dark:border-slate-700/70 dark:bg-slate-900 ${
+      className={`relative w-full rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm dark:border-slate-700/70 dark:bg-slate-900 ${
         isReport ? "p-6" : ""
       } [--chart-observed:#1d4ed8] [--chart-observed-soft:rgba(59,130,246,0.22)] [--chart-median:#64748b] [--chart-band-1:rgba(186,230,253,0.5)] [--chart-band-2:rgba(199,210,254,0.45)] [--chart-gh:rgba(187,247,208,0.45)] [--chart-gh-text:#15803d] [--chart-gnrh:rgba(254,215,170,0.5)] [--chart-gnrh-text:#c2410c] dark:[--chart-observed:#93c5fd] dark:[--chart-observed-soft:rgba(147,197,253,0.25)] dark:[--chart-median:#94a3b8] dark:[--chart-band-1:rgba(56,189,248,0.18)] dark:[--chart-band-2:rgba(129,140,248,0.2)] dark:[--chart-gh:rgba(34,197,94,0.18)] dark:[--chart-gh-text:#86efac] dark:[--chart-gnrh:rgba(249,115,22,0.2)] dark:[--chart-gnrh-text:#fdba74]`}
     >
