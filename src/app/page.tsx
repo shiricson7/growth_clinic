@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
+import type { Measurement, TherapyCourse, PatientInfo, HormoneLevels } from "@/lib/types";
 import {
   loadMeasurements,
   loadTherapyCourses,
@@ -38,6 +38,7 @@ import {
   getAgeYears,
   getIgf1Reference,
 } from "@/lib/igf1Roche";
+import type { NormalizedTestKey, ParsedResult } from "@/lib/labs/types";
 
 const sortMeasurements = (items: Measurement[]) =>
   [...items].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -46,6 +47,32 @@ const sortTherapies = (items: TherapyCourse[]) =>
   [...items].sort((a, b) =>
     a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0
   );
+
+const LAB_KEY_TO_HORMONE: Record<NormalizedTestKey, keyof HormoneLevels> = {
+  hba1c: "HbA1c",
+  ft4: "fT4",
+  tsh: "TSH",
+  lh: "LH",
+  fsh: "FSH",
+  testosterone: "Testosterone",
+  estradiol: "E2",
+  igfbp3: "IGF_BP3",
+  igf1: "IGF_1",
+  dhea: "DHEA",
+};
+
+const LAB_HORMONE_TO_KEY: Partial<Record<keyof HormoneLevels, NormalizedTestKey>> = {
+  HbA1c: "hba1c",
+  fT4: "ft4",
+  TSH: "tsh",
+  LH: "lh",
+  FSH: "fsh",
+  Testosterone: "testosterone",
+  E2: "estradiol",
+  IGF_BP3: "igfbp3",
+  IGF_1: "igf1",
+  DHEA: "dhea",
+};
 
 const normalizeHormoneLevels = (value: unknown): Record<string, string> => {
   if (!value) return {};
@@ -98,6 +125,16 @@ function PageContent() {
   const [loadStatus, setLoadStatus] = useState("");
   const [chartSuggestions, setChartSuggestions] = useState<ChartSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [labFile, setLabFile] = useState<File | null>(null);
+  const [labResults, setLabResults] = useState<Record<NormalizedTestKey, ParsedResult>>(
+    {} as Record<NormalizedTestKey, ParsedResult>
+  );
+  const [labCollectedAt, setLabCollectedAt] = useState("");
+  const [labMethod, setLabMethod] = useState<"pdf-text" | "ocr" | null>(null);
+  const [labRawText, setLabRawText] = useState("");
+  const [labImportStatus, setLabImportStatus] = useState("");
+  const [labSaveStatus, setLabSaveStatus] = useState("");
+  const [saveRawText, setSaveRawText] = useState(false);
 
   const hormoneFields = useMemo(
     () => [
@@ -226,6 +263,12 @@ function PageContent() {
     patientInfo.hormoneTestDate,
     measurements,
   ]);
+
+  useEffect(() => {
+    if (patientInfo.hormoneTestDate && !labCollectedAt) {
+      setLabCollectedAt(patientInfo.hormoneTestDate);
+    }
+  }, [patientInfo.hormoneTestDate, labCollectedAt]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -434,6 +477,123 @@ function PageContent() {
     return { added, updated, skipped: items.length - added - updated };
   };
 
+  const applyLabResultsToForm = (
+    results: Record<NormalizedTestKey, ParsedResult>,
+    collectedAtValue?: string | null
+  ) => {
+    const updates: Partial<HormoneLevels> = {};
+    Object.entries(results).forEach(([key, result]) => {
+      const hormoneKey = LAB_KEY_TO_HORMONE[key as NormalizedTestKey];
+      if (!hormoneKey) return;
+      updates[hormoneKey] = result.valueRaw;
+    });
+    if (Object.keys(updates).length > 0) {
+      setPatientInfo((prev) => ({
+        ...prev,
+        hormoneLevels: {
+          ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
+            ? prev.hormoneLevels
+            : {}),
+          ...updates,
+        },
+        hormoneTestDate: collectedAtValue ?? prev.hormoneTestDate ?? "",
+      }));
+    } else if (collectedAtValue) {
+      setPatientInfo((prev) => ({
+        ...prev,
+        hormoneTestDate: collectedAtValue,
+      }));
+    }
+  };
+
+  const parseLabNumeric = (raw: string) => {
+    const numeric = Number(raw.replace(/[<>≤≥＜＞]/g, "").trim());
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const handleImportLabPdf = async () => {
+    if (!session || !supabase) {
+      setLabImportStatus("로그인 후 업로드할 수 있어요.");
+      return;
+    }
+    if (!labFile) {
+      setLabImportStatus("PDF 파일을 선택해주세요.");
+      return;
+    }
+
+    setLabImportStatus("PDF를 분석하는 중...");
+    try {
+      const formData = new FormData();
+      formData.append("file", labFile);
+      const response = await fetch("/api/labs/import-pdf", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error("import failed");
+      }
+      const data = (await response.json()) as {
+        collectedAt: string | null;
+        results: Record<NormalizedTestKey, ParsedResult>;
+        method: "pdf-text" | "ocr";
+        rawText: string;
+      };
+      setLabResults(data.results ?? {});
+      setLabCollectedAt(data.collectedAt ?? "");
+      setLabMethod(data.method ?? null);
+      setLabRawText(data.rawText ?? "");
+      applyLabResultsToForm(data.results ?? {}, data.collectedAt);
+      setShowHormoneLevels(true);
+      hormoneToggledRef.current = true;
+      setLabImportStatus("추출 완료!");
+    } catch (error) {
+      setLabImportStatus("추출 실패: PDF 내용을 확인해주세요.");
+    }
+  };
+
+  const handleSaveLabResults = async () => {
+    if (!session || !supabase) {
+      setLabSaveStatus("로그인 후 저장할 수 있어요.");
+      return;
+    }
+    if (!patientInfo.chartNumber) {
+      setLabSaveStatus("차트번호를 입력해주세요.");
+      return;
+    }
+    if (!labCollectedAt) {
+      setLabSaveStatus("검체접수일을 입력해주세요.");
+      return;
+    }
+    if (!labMethod) {
+      setLabSaveStatus("먼저 PDF를 업로드해주세요.");
+      return;
+    }
+    setLabSaveStatus("저장 중...");
+    try {
+      const response = await fetch("/api/labs/save", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chartNumber: patientInfo.chartNumber,
+          collectedAt: labCollectedAt,
+          results: labResults,
+          extractionMethod: labMethod,
+          rawText: saveRawText ? labRawText : null,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("save failed");
+      }
+      setLabSaveStatus("저장 완료!");
+    } catch (error) {
+      setLabSaveStatus("저장에 실패했습니다.");
+    }
+  };
+
   const handleLoadPatient = async (key: string) => {
     const trimmed = key.trim();
     if (!trimmed) {
@@ -449,6 +609,10 @@ function PageContent() {
       setPatientInfo(stored.patientInfo);
       setMeasurements(sortMeasurements(stored.measurements));
       setTherapyCourses(sortTherapies(stored.therapyCourses));
+      setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
+      setLabCollectedAt(stored.patientInfo.hormoneTestDate ?? "");
+      setLabMethod(null);
+      setLabRawText("");
       setLoadStatus("환자 데이터를 불러왔어요.");
       return;
     }
@@ -497,6 +661,10 @@ function PageContent() {
       hormoneLevels: normalizeHormoneLevels(patient.hormone_levels),
       hormoneTestDate: patient.hormone_test_date ?? "",
     });
+    setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
+    setLabCollectedAt(patient.hormone_test_date ?? "");
+    setLabMethod(null);
+    setLabRawText("");
     setMeasurements(sortMeasurements(mappedMeasurements));
     setTherapyCourses([]);
     setLoadStatus("환자 데이터를 불러왔어요.");
@@ -928,25 +1096,58 @@ function PageContent() {
                           }
                         />
                       </div>
-                      {hormoneFields.map((field) => (
-                        <div key={field.key} className="space-y-1">
-                          <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>
+                      {hormoneFields.map((field) => {
+                        const labKey = LAB_HORMONE_TO_KEY[
+                          field.key as keyof HormoneLevels
+                        ];
+                        const labResult = labKey ? labResults[labKey] : undefined;
+                        return (
+                          <div key={field.key} className="space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>
+                              {labKey && (
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    labResult ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
+                                  }`}
+                                >
+                                  {labResult ? "추출됨" : "없음"}
+                                </span>
+                              )}
+                            </div>
                           <Input
                             id={`hormone-${field.key}`}
                             value={hormoneValues[field.key as keyof typeof hormoneValues] ?? ""}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
                               setPatientInfo((prev) => ({
                                 ...prev,
                                 hormoneLevels: {
                                   ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
                                     ? prev.hormoneLevels
                                     : {}),
-                                  [field.key]: event.target.value,
+                                  [field.key]: nextValue,
                                 },
-                              }))
-                            }
+                              }));
+                              if (labKey) {
+                                setLabResults((prev) => ({
+                                  ...prev,
+                                  [labKey]: {
+                                    testKey: labKey,
+                                    valueRaw: nextValue,
+                                    valueNumeric: parseLabNumeric(nextValue),
+                                    unit: prev[labKey]?.unit ?? null,
+                                    sourceLine: prev[labKey]?.sourceLine ?? "",
+                                    matchedBy: prev[labKey]?.matchedBy ?? "manual",
+                                  },
+                                }));
+                              }
+                            }}
                             placeholder="수치 입력"
                           />
+                          {labResult?.unit && (
+                            <p className="text-[11px] text-[#94a3b8]">단위: {labResult.unit}</p>
+                          )}
                           {field.key === "IGF_1" && igf1Insight && (
                             <p className="text-[11px] text-[#64748b]">
                               Roche Elecsys IGF-1 참고치: {igf1Insight.range} ng/mL ·
@@ -955,7 +1156,72 @@ function PageContent() {
                             </p>
                           )}
                         </div>
-                      ))}
+                      );
+                      })}
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm">
+                      <p className="text-sm font-semibold text-[#1a1c24]">혈액검사 PDF 업로드</p>
+                      <p className="mt-1 text-xs text-[#64748b]">
+                        Roche Elecsys IGF-1 검사 기준으로 결과를 자동 매칭합니다.
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(event) => setLabFile(event.target.files?.[0] ?? null)}
+                        />
+                        <Button variant="outline" onClick={handleImportLabPdf}>
+                          PDF 추출
+                        </Button>
+                        {labMethod && (
+                          <span className="text-xs text-[#94a3b8]">
+                            추출 방식: {labMethod === "pdf-text" ? "텍스트" : "OCR"}
+                          </span>
+                        )}
+                      </div>
+                      {labImportStatus && (
+                        <p className="mt-2 text-xs text-[#64748b]">{labImportStatus}</p>
+                      )}
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="labCollectedAt">검체접수일</Label>
+                          <Input
+                            id="labCollectedAt"
+                            type="date"
+                            value={labCollectedAt}
+                            onChange={(event) => {
+                              setLabCollectedAt(event.target.value);
+                              setPatientInfo((prev) => ({
+                                ...prev,
+                                hormoneTestDate: event.target.value,
+                              }));
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-end gap-3">
+                          <label className="flex items-center gap-2 text-xs text-[#475569]">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-[#1a1c24]"
+                              checked={saveRawText}
+                              onChange={(event) => setSaveRawText(event.target.checked)}
+                            />
+                            원문 텍스트 저장 허용
+                          </label>
+                          <Button onClick={handleSaveLabResults}>검사 결과 저장</Button>
+                        </div>
+                      </div>
+                      {labSaveStatus && (
+                        <p className="mt-2 text-xs text-[#64748b]">{labSaveStatus}</p>
+                      )}
+                      {labRawText && labImportStatus.includes("실패") && (
+                        <details className="mt-3 text-xs text-[#64748b]">
+                          <summary className="cursor-pointer font-semibold">원문 미리보기</summary>
+                          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-[11px] text-slate-700">
+                            {labRawText.slice(0, 2000)}
+                          </pre>
+                        </details>
+                      )}
                     </div>
                   </div>
                 )}

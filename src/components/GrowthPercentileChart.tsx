@@ -296,7 +296,7 @@ export default function GrowthPercentileChart({
     const range = Math.max(max - min, 0.1);
     const padding = Math.max(range * 0.12, 1);
     const baseLower = Math.max(min - padding, min * 0.7);
-    const lower = typeof minY === "number" ? Math.min(minY, baseLower) : baseLower;
+    const lower = typeof minY === "number" ? minY : baseLower;
     return [lower, max + padding] as [number, number];
   }, [combined, minY]);
 
