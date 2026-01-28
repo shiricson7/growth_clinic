@@ -647,7 +647,7 @@ function PageContent() {
     () =>
       therapyCourses.map((course) => ({
         id: course.id,
-        type: course.drug === "GH" ? "GH" : "GnRH",
+        type: course.drug === "GH" ? ("GH" as const) : ("GnRH" as const),
         label: course.drug === "GH" ? "Growth Hormone" : "GnRH agonist",
         startDate: course.startDate,
         endDate: course.endDate ?? null,
