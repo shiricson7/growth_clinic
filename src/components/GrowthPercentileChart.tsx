@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Area,
   ComposedChart,
+  CartesianGrid,
   Customized,
   Line,
   ReferenceLine,
@@ -207,7 +208,8 @@ export default function GrowthPercentileChart({
     : 0;
 
   const chartHeight = isReport ? 420 : 320;
-  const axisFontSize = isReport ? 12 : 11;
+  const axisFontSize = isReport ? 13 : 11;
+  const tickColor = "#64748b";
   const yDomain = useMemo(() => {
     const values: number[] = [];
     combined.forEach((item) => {
@@ -222,7 +224,7 @@ export default function GrowthPercentileChart({
         item.p97,
       ];
       candidates.forEach((value) => {
-        if (typeof value === "number" && Number.isFinite(value)) {
+        if (typeof value === "number" && Number.isFinite(value) && value > 0) {
           values.push(value);
         }
       });
@@ -230,8 +232,10 @@ export default function GrowthPercentileChart({
     if (values.length === 0) return [0, 1] as [number, number];
     const min = Math.min(...values);
     const max = Math.max(...values);
-    const padding = Math.max((max - min) * 0.08, 1);
-    return [min - padding, max + padding] as [number, number];
+    const range = Math.max(max - min, 0.1);
+    const padding = Math.max(range * 0.12, 1);
+    const lower = Math.max(min - padding, min * 0.7);
+    return [lower, max + padding] as [number, number];
   }, [combined]);
 
   const TreatmentLayer = (props: any) => {
@@ -281,7 +285,7 @@ export default function GrowthPercentileChart({
                 fill={color}
                 initial={{ x: x - 6, opacity: 0 }}
                 animate={{ x, opacity: 1 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
+                transition={{ duration: isReport ? 0.2 : 0.5, ease: "easeOut" }}
                 onMouseEnter={() => {
                   setTreatmentHover({
                     id: course.id,
@@ -333,22 +337,22 @@ export default function GrowthPercentileChart({
       <motion.div
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-lg"
+        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-md"
       >
-        <p className="text-[11px] text-white/70">
+        <p className="text-[11px] text-slate-500">
           {formatTooltipDate(dataPoint.ts)}
         </p>
         <p>
           실측값: {observed ?? "-"} {unit}
         </p>
         {delta !== null && (
-          <p className="text-[11px] text-white/80">
+          <p className="text-[11px] text-slate-500">
             50p 대비 {delta > 0 ? "+" : ""}
             {delta.toFixed(1)} {unit}
           </p>
         )}
         {activeTreatments.length > 0 && (
-          <p className="text-[11px] text-white/80">
+          <p className="text-[11px] text-slate-500">
             치료중: {activeTreatments.map((item) => item.label).join(", ")}
           </p>
         )}
@@ -361,12 +365,19 @@ export default function GrowthPercentileChart({
     if (cx === undefined || cy === undefined) return null;
     return (
       <motion.g
-        initial={{ scale: 0.9 }}
-        animate={{ scale: 1.12 }}
-        transition={{ duration: 0.2 }}
+        initial={{ scale: 0.96 }}
+        animate={{ scale: 1.08 }}
+        transition={{ duration: isReport ? 0.12 : 0.2 }}
       >
-        <circle cx={cx} cy={cy} r={8} fill="var(--chart-observed-soft)" />
-        <circle cx={cx} cy={cy} r={4} fill="var(--chart-observed)" />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={7}
+          fill="white"
+          stroke="var(--chart-observed)"
+          strokeWidth={2}
+        />
+        <circle cx={cx} cy={cy} r={3.5} fill="var(--chart-observed)" />
       </motion.g>
     );
   };
@@ -377,16 +388,17 @@ export default function GrowthPercentileChart({
     if (payload?.ts !== lastObserved.ts) return null;
     return (
       <motion.g
-        initial={{ opacity: 0, scale: 0.8 }}
+        initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
+        transition={{ duration: isReport ? 0.2 : 0.4, ease: "easeOut" }}
       >
         <circle
           cx={cx}
           cy={cy}
-          r={10}
-          fill="var(--chart-observed-soft)"
-          filter="url(#glow)"
+          r={9}
+          fill="white"
+          stroke="var(--chart-observed)"
+          strokeWidth={2}
         />
         <circle cx={cx} cy={cy} r={5} fill="var(--chart-observed)" />
       </motion.g>
@@ -395,28 +407,28 @@ export default function GrowthPercentileChart({
 
   return (
     <div
-      className={`relative w-full rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm dark:border-slate-700/70 dark:bg-slate-900 ${
-        isReport ? "p-6" : ""
-      } [--chart-observed:#1d4ed8] [--chart-observed-soft:rgba(59,130,246,0.22)] [--chart-median:#64748b] [--chart-band-1:rgba(186,230,253,0.5)] [--chart-band-2:rgba(199,210,254,0.45)] [--chart-gh:rgba(187,247,208,0.45)] [--chart-gh-text:#15803d] [--chart-gnrh:rgba(254,215,170,0.5)] [--chart-gnrh-text:#c2410c] dark:[--chart-observed:#93c5fd] dark:[--chart-observed-soft:rgba(147,197,253,0.25)] dark:[--chart-median:#94a3b8] dark:[--chart-band-1:rgba(56,189,248,0.18)] dark:[--chart-band-2:rgba(129,140,248,0.2)] dark:[--chart-gh:rgba(34,197,94,0.18)] dark:[--chart-gh-text:#86efac] dark:[--chart-gnrh:rgba(249,115,22,0.2)] dark:[--chart-gnrh-text:#fdba74]`}
+      className={`relative w-full rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${
+        isReport ? "p-6 dark:bg-white dark:text-slate-900" : "dark:bg-slate-900"
+      } [--chart-observed:#1e3a8a] [--chart-observed-soft:rgba(30,58,138,0.12)] [--chart-median:#64748b] [--chart-band-1:rgba(191,219,254,0.5)] [--chart-band-2:rgba(199,210,254,0.45)] [--chart-gh:rgba(187,247,208,0.45)] [--chart-gh-text:#166534] [--chart-gnrh:rgba(254,215,170,0.5)] [--chart-gnrh-text:#9a3412] dark:[--chart-observed:#93c5fd] dark:[--chart-observed-soft:rgba(147,197,253,0.25)] dark:[--chart-median:#94a3b8] dark:[--chart-band-1:rgba(56,189,248,0.18)] dark:[--chart-band-2:rgba(129,140,248,0.2)] dark:[--chart-gh:rgba(34,197,94,0.18)] dark:[--chart-gh-text:#86efac] dark:[--chart-gnrh:rgba(249,115,22,0.2)] dark:[--chart-gnrh-text:#fdba74]`}
     >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
             {title}
           </p>
-          <p className={`text-sm font-semibold text-slate-800 dark:text-slate-100 ${
+          <p className={`text-sm font-semibold text-slate-900 ${
             isReport ? "text-base" : ""
           }`}>
             {unit} 성장 곡선
           </p>
         </div>
-        <div className="text-xs text-slate-400">단위: {unit}</div>
+        <div className="text-xs text-slate-500">단위: {unit}</div>
       </div>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: isReport ? 0.2 : 0.5 }}
         className="relative"
       >
         <div style={{ height: chartHeight }}>
@@ -432,12 +444,12 @@ export default function GrowthPercentileChart({
               >
                 <defs>
                   <linearGradient id="band1090" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--chart-band-2)" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="var(--chart-band-2)" stopOpacity={0.1} />
+                    <stop offset="0%" stopColor="var(--chart-band-2)" stopOpacity={0.65} />
+                    <stop offset="100%" stopColor="var(--chart-band-2)" stopOpacity={0.2} />
                   </linearGradient>
                   <linearGradient id="band2575" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--chart-band-1)" stopOpacity={0.7} />
-                    <stop offset="100%" stopColor="var(--chart-band-1)" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="var(--chart-band-1)" stopOpacity={0.25} />
                   </linearGradient>
                   <linearGradient id="observedLine" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="var(--chart-observed)" stopOpacity={0.7} />
@@ -458,14 +470,14 @@ export default function GrowthPercentileChart({
                   scale="time"
                   domain={[domainStart, domainEnd]}
                   tickFormatter={formatTick}
-                  tick={{ fontSize: axisFontSize, fill: "#94a3b8" }}
-                  axisLine={false}
+                  tick={{ fontSize: axisFontSize, fill: tickColor }}
+                  axisLine={{ stroke: "rgba(148,163,184,0.2)" }}
                   tickLine={false}
                   minTickGap={14}
                 />
                 <YAxis
-                  tick={{ fontSize: axisFontSize, fill: "#94a3b8" }}
-                  axisLine={false}
+                  tick={{ fontSize: axisFontSize, fill: tickColor }}
+                  axisLine={{ stroke: "rgba(148,163,184,0.2)" }}
                   tickLine={false}
                   width={isReport ? 48 : 40}
                   domain={yDomain}
@@ -473,6 +485,12 @@ export default function GrowthPercentileChart({
                 />
 
                 <Customized component={TreatmentLayer} />
+
+                <CartesianGrid
+                  stroke="rgba(148,163,184,0.3)"
+                  strokeDasharray="4 4"
+                  vertical={false}
+                />
 
                 <Area
                   dataKey="band1090Base"
@@ -508,10 +526,10 @@ export default function GrowthPercentileChart({
                   type="monotone"
                   dataKey="p50"
                   stroke="var(--chart-median)"
-                  strokeWidth={1.5}
+                  strokeWidth={1.2}
                   dot={false}
                   isAnimationActive
-                  animationDuration={500}
+                  animationDuration={isReport ? 200 : 500}
                 />
 
                 <Line
@@ -523,20 +541,20 @@ export default function GrowthPercentileChart({
                   activeDot={activeDot}
                   connectNulls
                   isAnimationActive
-                  animationDuration={800}
+                  animationDuration={isReport ? 250 : 800}
                   animationEasing="ease-out"
                 />
 
                 {lastObserved && (
                   <ReferenceLine
                     x={lastObserved.ts}
-                    stroke="rgba(148,163,184,0.45)"
+                    stroke="rgba(100,116,139,0.55)"
                     strokeDasharray="4 4"
                   />
                 )}
 
                 <Tooltip
-                  cursor={{ stroke: "rgba(148,163,184,0.4)", strokeDasharray: "3 3" }}
+                  cursor={{ stroke: "rgba(100,116,139,0.4)", strokeDasharray: "3 3" }}
                   content={tooltipContent}
                 />
               </ComposedChart>
@@ -548,7 +566,7 @@ export default function GrowthPercentileChart({
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-[11px] text-white shadow-lg"
+            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-900 shadow-md"
             style={{ left: treatmentHover.x, top: treatmentHover.y }}
           >
             <p className="font-semibold">{treatmentHover.label}</p>
@@ -556,13 +574,17 @@ export default function GrowthPercentileChart({
               {treatmentHover.startDate} ~ {treatmentHover.endDate ?? "진행 중"}
             </p>
             {treatmentHover.note && (
-              <p className="text-white/70">{treatmentHover.note}</p>
+              <p className="text-slate-500">{treatmentHover.note}</p>
             )}
           </motion.div>
         )}
       </motion.div>
 
-      <div className="mt-4 flex flex-wrap gap-4">
+      <div
+        className={`mt-4 flex flex-wrap gap-4 ${
+          isReport ? "justify-end" : "justify-start"
+        }`}
+      >
         {legendItem("Observed", "var(--chart-observed)")}
         {legendItem("50p", "var(--chart-median)")}
         {legendItem("Bands", "var(--chart-band-2)", true)}
