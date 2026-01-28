@@ -890,6 +890,9 @@ function PageContent() {
             >
               A4 요약 인쇄
             </Button>
+            <Link href="/igf1">
+              <Button variant="outline">IGF-1 분석기</Button>
+            </Link>
             <Button variant="outline" onClick={handleReset}>
               초기화
             </Button>
