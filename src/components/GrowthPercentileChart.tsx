@@ -46,6 +46,7 @@ type GrowthPercentileChartProps = {
   unit: string;
   mode?: "screen" | "report";
   theme?: "light" | "dark" | "auto";
+  minY?: number;
   data: {
     observed: GrowthObservedPoint[];
     percentiles: GrowthPercentilePoint[];
@@ -135,6 +136,7 @@ export default function GrowthPercentileChart({
   unit,
   mode = "screen",
   theme = "light",
+  minY,
   data,
   treatments = [],
 }: GrowthPercentileChartProps) {
@@ -293,9 +295,10 @@ export default function GrowthPercentileChart({
     const max = Math.max(...values);
     const range = Math.max(max - min, 0.1);
     const padding = Math.max(range * 0.12, 1);
-    const lower = Math.max(min - padding, min * 0.7);
+    const baseLower = Math.max(min - padding, min * 0.7);
+    const lower = typeof minY === "number" ? Math.min(minY, baseLower) : baseLower;
     return [lower, max + padding] as [number, number];
-  }, [combined]);
+  }, [combined, minY]);
 
   const TreatmentLayer = (props: any) => {
     if (!treatmentLanes.length) return null;
@@ -534,6 +537,7 @@ export default function GrowthPercentileChart({
                   tickLine={false}
                   width={isReport ? 48 : 40}
                   domain={yDomain}
+                  allowDataOverflow
                   tickFormatter={(value) => Number(value).toFixed(0)}
                 />
 
@@ -551,6 +555,7 @@ export default function GrowthPercentileChart({
                   stroke="none"
                   fill="transparent"
                   isAnimationActive={false}
+                  connectNulls
                 />
                 <Area
                   dataKey="band1090"
@@ -558,6 +563,7 @@ export default function GrowthPercentileChart({
                   stroke="none"
                   fill="url(#band1090)"
                   isAnimationActive={false}
+                  connectNulls
                 />
 
                 <Area
@@ -566,6 +572,7 @@ export default function GrowthPercentileChart({
                   stroke="none"
                   fill="transparent"
                   isAnimationActive={false}
+                  connectNulls
                 />
                 <Area
                   dataKey="band2575"
@@ -573,6 +580,7 @@ export default function GrowthPercentileChart({
                   stroke="none"
                   fill="url(#band2575)"
                   isAnimationActive={false}
+                  connectNulls
                 />
 
                 <Line

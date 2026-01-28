@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { HormoneLevels } from "@/lib/types";
+import {
+  estimateIgf1Percentile,
+  formatIgf1Range,
+  getAgeYears,
+  getIgf1Reference,
+} from "@/lib/igf1Roche";
 
 export type ChildInfo = {
   chartNumber: string;
@@ -91,6 +97,34 @@ export default function ChildInfoForm({
   const hasHormoneValue = Object.values(data.hormoneLevels ?? {}).some(
     (value) => value && value.trim() !== ""
   );
+
+  const igf1Insight = useMemo(() => {
+    const raw = data.hormoneLevels?.IGF_1?.trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return null;
+    if (data.sex !== "male" && data.sex !== "female") return null;
+    if (!data.birthDate) return null;
+    const referenceDate =
+      data.hormoneTestDate || data.measurementDate || new Date().toISOString().slice(0, 10);
+    const ageYears = getAgeYears(data.birthDate, referenceDate);
+    if (ageYears === null) return null;
+    const reference = getIgf1Reference(data.sex, ageYears);
+    if (!reference) return null;
+    const percentile = estimateIgf1Percentile(value, reference);
+    return {
+      percentile,
+      range: formatIgf1Range(reference),
+      ageYears,
+      referenceDate,
+    };
+  }, [
+    data.birthDate,
+    data.hormoneLevels?.IGF_1,
+    data.hormoneTestDate,
+    data.measurementDate,
+    data.sex,
+  ]);
 
   useEffect(() => {
     if (!boneAgeToggledRef.current && hasBoneAgeValue && !showBoneAge) {
@@ -291,6 +325,13 @@ export default function ChildInfoForm({
                     placeholder="수치 입력"
                     className={inputTone}
                   />
+                  {field.key === "IGF_1" && igf1Insight && (
+                    <p className="text-[11px] text-[#64748b]">
+                      Roche Elecsys IGF-1 참고치: {igf1Insight.range} ng/mL · 약
+                      P{igf1Insight.percentile.toFixed(1)} (기준 {igf1Insight.referenceDate}, 만{" "}
+                      {igf1Insight.ageYears.toFixed(1)}세)
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

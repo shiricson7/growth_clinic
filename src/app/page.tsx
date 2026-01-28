@@ -32,6 +32,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAgeMonths, percentileFromValue, valueAtPercentile } from "@/lib/percentileLogic";
+import {
+  estimateIgf1Percentile,
+  formatIgf1Range,
+  getAgeYears,
+  getIgf1Reference,
+} from "@/lib/igf1Roche";
 
 const sortMeasurements = (items: Measurement[]) =>
   [...items].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -574,6 +580,36 @@ function PageContent() {
       ? {}
       : (patientInfo.hormoneLevels ?? {});
 
+  const igf1Insight = useMemo(() => {
+    const raw = hormoneValues.IGF_1?.trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return null;
+    if (patientInfo.sex !== "male" && patientInfo.sex !== "female") return null;
+    if (!patientInfo.birthDate) return null;
+    const referenceDate =
+      patientInfo.hormoneTestDate ||
+      latestMeasurement?.date ||
+      new Date().toISOString().slice(0, 10);
+    const ageYears = getAgeYears(patientInfo.birthDate, referenceDate);
+    if (ageYears === null) return null;
+    const reference = getIgf1Reference(patientInfo.sex, ageYears);
+    if (!reference) return null;
+    const percentile = estimateIgf1Percentile(value, reference);
+    return {
+      percentile,
+      range: formatIgf1Range(reference),
+      ageYears,
+      referenceDate,
+    };
+  }, [
+    hormoneValues.IGF_1,
+    latestMeasurement?.date,
+    patientInfo.birthDate,
+    patientInfo.hormoneTestDate,
+    patientInfo.sex,
+  ]);
+
   const summaryName = patientInfo.name?.trim() || "아이";
   const heightSummary = latestHeightPercentile !== null
     ? `${latestHeightPercentile.toFixed(1)}퍼센타일`
@@ -598,7 +634,7 @@ function PageContent() {
     [measurements]
   );
 
-  const buildPercentiles = (metric: "height" | "weight") => {
+  const buildPercentiles = (metric: "height" | "weight", extraDates: string[]) => {
     if (!patientInfo.birthDate) return [];
     if (!patientInfo.sex) return [];
     if (!measurements.length) return [];
@@ -616,7 +652,9 @@ function PageContent() {
     if (dates[dates.length - 1] !== endDate) {
       dates.push(endDate);
     }
-    return dates.map((date) => {
+    const dateSet = new Set<string>([...dates, ...extraDates]);
+    const finalDates = Array.from(dateSet).sort((a, b) => (a < b ? -1 : 1));
+    return finalDates.map((date) => {
       const ageMonths = getAgeMonths(patientInfo.birthDate, date);
       return {
         date,
@@ -631,17 +669,15 @@ function PageContent() {
     });
   };
 
-  const heightPercentiles = useMemo(() => buildPercentiles("height"), [
-    measurements,
-    patientInfo.birthDate,
-    patientInfo.sex,
-  ]);
+  const heightPercentiles = useMemo(
+    () => buildPercentiles("height", heightObserved.map((item) => item.date)),
+    [measurements, patientInfo.birthDate, patientInfo.sex, heightObserved]
+  );
 
-  const weightPercentiles = useMemo(() => buildPercentiles("weight"), [
-    measurements,
-    patientInfo.birthDate,
-    patientInfo.sex,
-  ]);
+  const weightPercentiles = useMemo(
+    () => buildPercentiles("weight", weightObserved.map((item) => item.date)),
+    [measurements, patientInfo.birthDate, patientInfo.sex, weightObserved]
+  );
 
   const chartTreatments = useMemo(
     () =>
@@ -911,6 +947,13 @@ function PageContent() {
                             }
                             placeholder="수치 입력"
                           />
+                          {field.key === "IGF_1" && igf1Insight && (
+                            <p className="text-[11px] text-[#64748b]">
+                              Roche Elecsys IGF-1 참고치: {igf1Insight.range} ng/mL ·
+                              약 P{igf1Insight.percentile.toFixed(1)}{" "}
+                              (기준 {igf1Insight.referenceDate}, 만 {igf1Insight.ageYears.toFixed(1)}세)
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -980,6 +1023,7 @@ function PageContent() {
             title="Height Growth"
             unit="cm"
             mode="screen"
+            minY={90}
             data={{
               observed: heightObserved,
               percentiles: heightPercentiles,
