@@ -524,7 +524,7 @@ export default function GrowthPercentileChart({
                   connectNulls
                   isAnimationActive
                   animationDuration={800}
-                  animationEasing="easeOut"
+                  animationEasing="ease-out"
                 />
 
                 {lastObserved && (
