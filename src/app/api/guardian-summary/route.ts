@@ -52,6 +52,8 @@ IMPORTANT:
 - 약 용량/처방을 말하지 말 것
 - 확정적인 의학적 결론을 내리지 말 것
 - 데이터가 부족하면 부족한 점을 분명히 말할 것
+- 마지막 문장은 반드시 완결형으로 끝나야 합니다(예: "입니다.", "하세요.").
+- 분량은 10~14줄 이내로 간결하게 유지하세요.
 
 출력 형식:
 [요약]
@@ -226,7 +228,7 @@ export async function POST(request: Request) {
 
     const requestBody = {
       model: "gpt-5-mini",
-      max_output_tokens: 450,
+      max_output_tokens: 800,
       reasoning: { effort: "minimal" },
       instructions: PROMPT,
       input: JSON.stringify(promptPayload),

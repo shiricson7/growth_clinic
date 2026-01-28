@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { differenceInMonths, parseISO } from "date-fns";
+import { differenceInMonths, format, parseISO } from "date-fns";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import { loadMeasurements, loadTherapyCourses, loadPatientInfo } from "@/lib/storage";
 import { getAgeMonths, percentileFromValue } from "@/lib/percentileLogic";
@@ -118,6 +126,15 @@ export default function PrintPage() {
       .filter((entry) => entry.value && entry.value.trim() !== "");
   }, [patientInfo.hormoneLevels]);
 
+  const hormoneSummary = useMemo(() => {
+    if (hormoneEntries.length === 0) return "-";
+    const summary = hormoneEntries.slice(0, 4).map((entry) => `${entry.label} ${entry.value}`);
+    if (hormoneEntries.length > 4) {
+      summary.push(`외 ${hormoneEntries.length - 4}항목`);
+    }
+    return summary.join(" · ");
+  }, [hormoneEntries]);
+
   const heightDelta = useMemo(() => {
     if (!firstMeasurement?.heightCm || !latestMeasurement?.heightCm) return null;
     return Number((latestMeasurement.heightCm - firstMeasurement.heightCm).toFixed(1));
@@ -152,6 +169,25 @@ export default function PrintPage() {
   );
 
   const payloadKey = useMemo(() => JSON.stringify(payload), [payload]);
+
+  const chartData = useMemo(
+    () =>
+      sortedMeasurements.map((item) => ({
+        date: item.date,
+        height: item.heightCm ?? null,
+        weight: item.weightKg ?? null,
+      })),
+    [sortedMeasurements]
+  );
+
+  const hasHeight = useMemo(
+    () => sortedMeasurements.some((item) => typeof item.heightCm === "number"),
+    [sortedMeasurements]
+  );
+  const hasWeight = useMemo(
+    () => sortedMeasurements.some((item) => typeof item.weightKg === "number"),
+    [sortedMeasurements]
+  );
 
   useEffect(() => {
     const hasData = Boolean(payload.birthDate) && payload.measurements.length > 0;
@@ -239,91 +275,131 @@ export default function PrintPage() {
           </p>
         </header>
 
-        <section className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
-            <p className="text-xs font-semibold text-[#94a3b8]">아이 정보</p>
-            <div className="mt-2 space-y-1 text-sm text-[#1f2937]">
-              <p>이름: {patientInfo.name || "미입력"}</p>
-              <p>성별: {formatSex(patientInfo.sex)}</p>
-              <p>생년월일: {patientInfo.birthDate || "-"}</p>
-              <p>측정 기간: {measurementRange}</p>
-              {patientInfo.boneAge && <p>골연령: {patientInfo.boneAge}</p>}
-              {hormoneEntries.length > 0 && (
-                <div className="pt-1 text-xs text-[#475569]">
-                  <p className="font-semibold text-[#64748b]">호르몬 수치</p>
-                  <ul className="mt-1 space-y-0.5">
-                    {hormoneEntries.map((entry) => (
-                      <li key={`${entry.label}-${entry.value}`}>
-                        {entry.label}: {entry.value}
-                      </li>
-                    ))}
-                  </ul>
+        <section className="mt-5 grid gap-4 lg:grid-cols-[1.25fr,1fr]">
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+              <p className="text-xs font-semibold text-[#94a3b8]">아이 정보</p>
+              <div className="mt-2 grid gap-x-4 gap-y-1 text-[13px] text-[#1f2937] md:grid-cols-2">
+                <p>이름: {patientInfo.name || "미입력"}</p>
+                <p>성별: {formatSex(patientInfo.sex)}</p>
+                <p>생년월일: {patientInfo.birthDate || "-"}</p>
+                <p>측정 기간: {measurementRange}</p>
+                <p>골연령: {patientInfo.boneAge || "-"}</p>
+                <p>호르몬: {hormoneSummary}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
+              <p className="text-xs font-semibold text-[#94a3b8]">최근 측정 요약</p>
+              {latestMeasurement ? (
+                <div className="mt-2 grid gap-x-4 gap-y-1 text-[13px] text-[#1f2937] md:grid-cols-2">
+                  <p>측정일: {latestMeasurement.date}</p>
+                  <p>
+                    키: {latestMeasurement.heightCm ?? "-"} cm{" "}
+                    {latestHeightPercentile !== null
+                      ? `(약 ${latestHeightPercentile.toFixed(1)}퍼센타일)`
+                      : ""}
+                  </p>
+                  <p>
+                    몸무게: {latestMeasurement.weightKg ?? "-"} kg{" "}
+                    {latestWeightPercentile !== null
+                      ? `(약 ${latestWeightPercentile.toFixed(1)}퍼센타일)`
+                      : ""}
+                  </p>
+                  <p>
+                    기간: {measurementSpanMonths !== null ? `${measurementSpanMonths}개월` : "-"}
+                  </p>
+                  <p>키 변화: {heightDelta !== null ? `${heightDelta} cm` : "-"}</p>
+                  <p>몸무게 변화: {weightDelta !== null ? `${weightDelta} kg` : "-"}</p>
                 </div>
+              ) : (
+                <p className="mt-2 text-sm text-[#64748b]">측정 기록이 없습니다.</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
+              <p className="text-xs font-semibold text-[#94a3b8]">치료 기간</p>
+              {therapyCourses.length === 0 ? (
+                <p className="mt-2 text-sm text-[#64748b]">기록된 치료가 없습니다.</p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-[13px] text-[#1f2937]">
+                  {therapyCourses.map((course) => {
+                    const doseLabel =
+                      course.drug === "GH" && course.doseNote ? ` (${course.doseNote})` : "";
+                    return (
+                      <li key={course.id}>
+                        {course.drug}
+                        {doseLabel} · {course.startDate}
+                        {course.endDate ? ` ~ ${course.endDate}` : " (진행 중)"}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
-            <p className="text-xs font-semibold text-[#94a3b8]">최근 측정 요약</p>
-            {latestMeasurement ? (
-              <div className="mt-2 space-y-1 text-sm text-[#1f2937]">
-                <p>측정일: {latestMeasurement.date}</p>
-                <p>
-                  키: {latestMeasurement.heightCm ?? "-"} cm{" "}
-                  {latestHeightPercentile !== null
-                    ? `(약 ${latestHeightPercentile.toFixed(1)}퍼센타일)`
-                    : ""}
-                </p>
-                <p>
-                  몸무게: {latestMeasurement.weightKg ?? "-"} kg{" "}
-                  {latestWeightPercentile !== null
-                    ? `(약 ${latestWeightPercentile.toFixed(1)}퍼센타일)`
-                    : ""}
-                </p>
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-[#64748b]">측정 기록이 없습니다.</p>
-            )}
-          </div>
-        </section>
 
-        <section className="mt-4 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm">
-            <p className="text-xs font-semibold text-[#94a3b8]">변화 요약</p>
-            <div className="mt-2 space-y-1 text-sm text-[#1f2937]">
-              <p>
-                기간: {measurementSpanMonths !== null ? `${measurementSpanMonths}개월` : "-"}
-              </p>
-              <p>
-                키 변화: {heightDelta !== null ? `${heightDelta} cm` : "-"}
-              </p>
-              <p>
-                몸무게 변화: {weightDelta !== null ? `${weightDelta} kg` : "-"}
-              </p>
+          <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-[#94a3b8]">성장 차트</p>
+              <span className="text-[11px] text-[#94a3b8]">
+                {sortedMeasurements.length}건
+              </span>
+            </div>
+            <div className="mt-2 h-[220px] w-full">
+              {sortedMeasurements.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-xs text-[#94a3b8]">
+                  차트에 표시할 기록이 없습니다.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 8, right: 12, left: -6, bottom: 0 }}>
+                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: "#94a3b8" }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) =>
+                        format(new Date(String(value)), "MM.dd")
+                      }
+                      minTickGap={14}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "#94a3b8" }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={32}
+                      domain={["dataMin - 2", "dataMax + 2"]}
+                    />
+                    {hasHeight && (
+                      <Line
+                        type="monotone"
+                        dataKey="height"
+                        stroke="#6366f1"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
+                      />
+                    )}
+                    {hasWeight && (
+                      <Line
+                        type="monotone"
+                        dataKey="weight"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm">
-            <p className="text-xs font-semibold text-[#94a3b8]">치료 기간</p>
-            {therapyCourses.length === 0 ? (
-              <p className="mt-2 text-sm text-[#64748b]">기록된 치료가 없습니다.</p>
-            ) : (
-              <ul className="mt-2 space-y-1 text-sm text-[#1f2937]">
-                {therapyCourses.map((course) => {
-                  const doseLabel =
-                    course.drug === "GH" && course.doseNote ? ` (${course.doseNote})` : "";
-                  return (
-                    <li key={course.id}>
-                      {course.drug}
-                      {doseLabel} · {course.startDate}
-                      {course.endDate ? ` ~ ${course.endDate}` : " (진행 중)"}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
         </section>
 
-        <section className="relative mt-6 overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white via-white to-[#f8fafc] p-5 shadow-sm">
+        <section className="relative mt-4 overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white via-white to-[#f8fafc] p-4 shadow-sm">
           <div className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-[#818cf8] via-[#60a5fa] to-[#34d399] opacity-70" />
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[#0f172a]">보호자 설명 요약</p>
@@ -331,11 +407,11 @@ export default function PrintPage() {
               <span className="text-xs text-[#94a3b8]">요약 생성 중...</span>
             )}
           </div>
-          <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#1f2937]">
+          <div className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-[#1f2937]">
             {status === "loading" ? "요약을 생성 중입니다..." : summary.text}
           </div>
           {summary.debugReason && (
-            <p className="mt-3 text-[11px] text-[#94a3b8]">
+            <p className="mt-2 text-[11px] text-[#94a3b8]">
               오류 원인: {summary.debugReason}
             </p>
           )}
