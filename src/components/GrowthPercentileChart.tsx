@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   Area,
   ComposedChart,
@@ -45,6 +45,7 @@ type GrowthPercentileChartProps = {
   title: string;
   unit: string;
   mode?: "screen" | "report";
+  theme?: "light" | "dark" | "auto";
   data: {
     observed: GrowthObservedPoint[];
     percentiles: GrowthPercentilePoint[];
@@ -119,8 +120,8 @@ const buildTreatmentLanes = (
   });
 };
 
-const legendItem = (label: string, color: string, isBand?: boolean) => (
-  <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+const legendItem = (label: string, color: string, isBand: boolean, textClass: string) => (
+  <div className={`flex items-center gap-2 text-xs ${textClass}`}>
     <span
       className={isBand ? "h-2 w-4 rounded-sm" : "h-2 w-2 rounded-full"}
       style={{ backgroundColor: color }}
@@ -133,10 +134,28 @@ export default function GrowthPercentileChart({
   title,
   unit,
   mode = "screen",
+  theme = "light",
   data,
   treatments = [],
 }: GrowthPercentileChartProps) {
   const isReport = mode === "report";
+  const themeMode = isReport ? "light" : theme;
+  const [isAutoDark, setIsAutoDark] = useState(false);
+  useEffect(() => {
+    if (themeMode !== "auto") return;
+    const update = () => {
+      if (typeof document === "undefined") return;
+      setIsAutoDark(document.documentElement.classList.contains("dark"));
+    };
+    update();
+    const observer = new MutationObserver(update);
+    if (typeof document !== "undefined") {
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    }
+    return () => observer.disconnect();
+  }, [themeMode]);
+  const resolvedTheme: "light" | "dark" =
+    themeMode === "auto" ? (isAutoDark ? "dark" : "light") : themeMode;
   const [treatmentHover, setTreatmentHover] = useState<TreatmentTooltip | null>(null);
 
   const combined = useMemo<CombinedPoint[]>(() => {
@@ -209,7 +228,47 @@ export default function GrowthPercentileChart({
 
   const chartHeight = isReport ? 420 : 320;
   const axisFontSize = isReport ? 13 : 11;
-  const tickColor = "#64748b";
+  const tickColor = resolvedTheme === "dark" ? "#cbd5e1" : "#475569";
+  const gridColor =
+    resolvedTheme === "dark" ? "rgba(148,163,184,0.25)" : "rgba(148,163,184,0.35)";
+  const axisColor =
+    resolvedTheme === "dark" ? "rgba(148,163,184,0.2)" : "rgba(148,163,184,0.2)";
+  const legendTextClass =
+    resolvedTheme === "dark" ? "text-slate-200" : "text-slate-600";
+  const tooltipClass =
+    resolvedTheme === "dark"
+      ? "border-slate-700 bg-slate-900 text-slate-100 shadow-lg"
+      : "border-slate-200 bg-white text-slate-900 shadow-md";
+  const tooltipMuted =
+    resolvedTheme === "dark" ? "text-slate-400" : "text-slate-500";
+  const wrapperClass =
+    resolvedTheme === "dark"
+      ? "border-slate-700 bg-slate-900 text-slate-100"
+      : "border-slate-200/80 bg-white text-slate-900";
+  const themeVars =
+    resolvedTheme === "dark"
+      ? ({
+          ["--chart-observed" as string]: "#93c5fd",
+          ["--chart-observed-soft" as string]: "rgba(147,197,253,0.18)",
+          ["--chart-median" as string]: "#94a3b8",
+          ["--chart-band-1" as string]: "rgba(56,189,248,0.18)",
+          ["--chart-band-2" as string]: "rgba(129,140,248,0.2)",
+          ["--chart-gh" as string]: "rgba(34,197,94,0.2)",
+          ["--chart-gh-text" as string]: "#86efac",
+          ["--chart-gnrh" as string]: "rgba(249,115,22,0.2)",
+          ["--chart-gnrh-text" as string]: "#fdba74",
+        } as CSSProperties)
+      : ({
+          ["--chart-observed" as string]: "#1e3a8a",
+          ["--chart-observed-soft" as string]: "rgba(30,58,138,0.12)",
+          ["--chart-median" as string]: "#64748b",
+          ["--chart-band-1" as string]: "rgba(191,219,254,0.5)",
+          ["--chart-band-2" as string]: "rgba(199,210,254,0.45)",
+          ["--chart-gh" as string]: "rgba(187,247,208,0.45)",
+          ["--chart-gh-text" as string]: "#166534",
+          ["--chart-gnrh" as string]: "rgba(254,215,170,0.5)",
+          ["--chart-gnrh-text" as string]: "#9a3412",
+        } as CSSProperties);
   const yDomain = useMemo(() => {
     const values: number[] = [];
     combined.forEach((item) => {
@@ -337,22 +396,22 @@ export default function GrowthPercentileChart({
       <motion.div
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-md"
+        className={`rounded-lg border px-3 py-2 text-xs ${tooltipClass}`}
       >
-        <p className="text-[11px] text-slate-500">
+        <p className={`text-[11px] ${tooltipMuted}`}>
           {formatTooltipDate(dataPoint.ts)}
         </p>
         <p>
           실측값: {observed ?? "-"} {unit}
         </p>
         {delta !== null && (
-          <p className="text-[11px] text-slate-500">
+          <p className={`text-[11px] ${tooltipMuted}`}>
             50p 대비 {delta > 0 ? "+" : ""}
             {delta.toFixed(1)} {unit}
           </p>
         )}
         {activeTreatments.length > 0 && (
-          <p className="text-[11px] text-slate-500">
+          <p className={`text-[11px] ${tooltipMuted}`}>
             치료중: {activeTreatments.map((item) => item.label).join(", ")}
           </p>
         )}
@@ -407,16 +466,17 @@ export default function GrowthPercentileChart({
 
   return (
     <div
-      className={`relative w-full rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${
-        isReport ? "p-6 dark:bg-white dark:text-slate-900" : "dark:bg-slate-900"
-      } [--chart-observed:#1e3a8a] [--chart-observed-soft:rgba(30,58,138,0.12)] [--chart-median:#64748b] [--chart-band-1:rgba(191,219,254,0.5)] [--chart-band-2:rgba(199,210,254,0.45)] [--chart-gh:rgba(187,247,208,0.45)] [--chart-gh-text:#166534] [--chart-gnrh:rgba(254,215,170,0.5)] [--chart-gnrh-text:#9a3412] dark:[--chart-observed:#93c5fd] dark:[--chart-observed-soft:rgba(147,197,253,0.25)] dark:[--chart-median:#94a3b8] dark:[--chart-band-1:rgba(56,189,248,0.18)] dark:[--chart-band-2:rgba(129,140,248,0.2)] dark:[--chart-gh:rgba(34,197,94,0.18)] dark:[--chart-gh-text:#86efac] dark:[--chart-gnrh:rgba(249,115,22,0.2)] dark:[--chart-gnrh-text:#fdba74]`}
+      className={`relative w-full rounded-3xl border p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${
+        isReport ? "p-6" : ""
+      } ${wrapperClass}`}
+      style={themeVars}
     >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
             {title}
           </p>
-          <p className={`text-sm font-semibold text-slate-900 ${
+          <p className={`text-sm font-semibold ${resolvedTheme === "dark" ? "text-white" : "text-slate-900"} ${
             isReport ? "text-base" : ""
           }`}>
             {unit} 성장 곡선
@@ -455,13 +515,6 @@ export default function GrowthPercentileChart({
                     <stop offset="0%" stopColor="var(--chart-observed)" stopOpacity={0.7} />
                     <stop offset="100%" stopColor="var(--chart-observed)" stopOpacity={1} />
                   </linearGradient>
-                  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="6" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
                 </defs>
 
                 <XAxis
@@ -471,13 +524,13 @@ export default function GrowthPercentileChart({
                   domain={[domainStart, domainEnd]}
                   tickFormatter={formatTick}
                   tick={{ fontSize: axisFontSize, fill: tickColor }}
-                  axisLine={{ stroke: "rgba(148,163,184,0.2)" }}
+                  axisLine={{ stroke: axisColor }}
                   tickLine={false}
                   minTickGap={14}
                 />
                 <YAxis
                   tick={{ fontSize: axisFontSize, fill: tickColor }}
-                  axisLine={{ stroke: "rgba(148,163,184,0.2)" }}
+                  axisLine={{ stroke: axisColor }}
                   tickLine={false}
                   width={isReport ? 48 : 40}
                   domain={yDomain}
@@ -487,7 +540,7 @@ export default function GrowthPercentileChart({
                 <Customized component={TreatmentLayer} />
 
                 <CartesianGrid
-                  stroke="rgba(148,163,184,0.3)"
+                  stroke={gridColor}
                   strokeDasharray="4 4"
                   vertical={false}
                 />
@@ -548,13 +601,19 @@ export default function GrowthPercentileChart({
                 {lastObserved && (
                   <ReferenceLine
                     x={lastObserved.ts}
-                    stroke="rgba(100,116,139,0.55)"
+                    stroke={resolvedTheme === "dark" ? "rgba(148,163,184,0.4)" : "rgba(100,116,139,0.45)"}
                     strokeDasharray="4 4"
                   />
                 )}
 
                 <Tooltip
-                  cursor={{ stroke: "rgba(100,116,139,0.4)", strokeDasharray: "3 3" }}
+                  cursor={{
+                    stroke:
+                      resolvedTheme === "dark"
+                        ? "rgba(148,163,184,0.4)"
+                        : "rgba(100,116,139,0.4)",
+                    strokeDasharray: "3 3",
+                  }}
                   content={tooltipContent}
                 />
               </ComposedChart>
@@ -566,7 +625,7 @@ export default function GrowthPercentileChart({
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-900 shadow-md"
+            className={`pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border px-3 py-2 text-[11px] ${tooltipClass}`}
             style={{ left: treatmentHover.x, top: treatmentHover.y }}
           >
             <p className="font-semibold">{treatmentHover.label}</p>
@@ -574,7 +633,7 @@ export default function GrowthPercentileChart({
               {treatmentHover.startDate} ~ {treatmentHover.endDate ?? "진행 중"}
             </p>
             {treatmentHover.note && (
-              <p className="text-slate-500">{treatmentHover.note}</p>
+              <p className={tooltipMuted}>{treatmentHover.note}</p>
             )}
           </motion.div>
         )}
@@ -585,10 +644,10 @@ export default function GrowthPercentileChart({
           isReport ? "justify-end" : "justify-start"
         }`}
       >
-        {legendItem("Observed", "var(--chart-observed)")}
-        {legendItem("50p", "var(--chart-median)")}
-        {legendItem("Bands", "var(--chart-band-2)", true)}
-        {legendItem("Treatments", "var(--chart-gh)", true)}
+        {legendItem("Observed", "var(--chart-observed)", false, legendTextClass)}
+        {legendItem("50p", "var(--chart-median)", false, legendTextClass)}
+        {legendItem("Bands", "var(--chart-band-2)", true, legendTextClass)}
+        {legendItem("Treatments", "var(--chart-gh)", true, legendTextClass)}
       </div>
 
       {/*
