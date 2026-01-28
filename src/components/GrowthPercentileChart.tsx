@@ -208,6 +208,31 @@ export default function GrowthPercentileChart({
 
   const chartHeight = isReport ? 420 : 320;
   const axisFontSize = isReport ? 12 : 11;
+  const yDomain = useMemo(() => {
+    const values: number[] = [];
+    combined.forEach((item) => {
+      const candidates = [
+        item.observed,
+        item.p3,
+        item.p10,
+        item.p25,
+        item.p50,
+        item.p75,
+        item.p90,
+        item.p97,
+      ];
+      candidates.forEach((value) => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          values.push(value);
+        }
+      });
+    });
+    if (values.length === 0) return [0, 1] as [number, number];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = Math.max((max - min) * 0.08, 1);
+    return [min - padding, max + padding] as [number, number];
+  }, [combined]);
 
   const TreatmentLayer = (props: any) => {
     if (!treatmentLanes.length) return null;
@@ -443,6 +468,8 @@ export default function GrowthPercentileChart({
                   axisLine={false}
                   tickLine={false}
                   width={isReport ? 48 : 40}
+                  domain={yDomain}
+                  tickFormatter={(value) => Number(value).toFixed(0)}
                 />
 
                 <Customized component={TreatmentLayer} />
