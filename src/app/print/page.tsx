@@ -276,42 +276,46 @@ export default function PrintPage() {
         </div>
 
         <section className="print-page flex min-h-[calc(297mm-24mm)] flex-col gap-4">
-          <div className="flex items-center justify-between gap-4">
-            <img src={logo.src} alt="??? ?????? ??" className="h-10 w-auto" />
+          <div className="flex items-center justify-center gap-4">
+            <img
+              src={logo.src}
+              alt="신익순 소아청소년과 로고"
+              className="w-[75%] max-h-[60mm] object-contain"
+            />
           </div>
 
           <header className="relative border-b border-[#e2e8f0] pb-5">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#94a3b8]">
-              ?? ??
+              성장 요약
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-bold text-[#0f172a]">?? ?? ???</h1>
+              <h1 className="text-2xl font-bold text-[#0f172a]">성장 요약 리포트</h1>
               <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-[#4338ca]">
-                ????
+                보호자용
               </span>
             </div>
             <p className="mt-2 text-xs text-[#64748b]">
-              ?? ?? ??? ? ??? ??????.
+              최근 성장 흐름을 한 장으로 정리했습니다.
             </p>
           </header>
 
           <section className="mt-5 grid gap-4 lg:grid-cols-[1.25fr,1fr]">
             <div className="space-y-4">
               <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
-                <p className="text-xs font-semibold text-[#94a3b8]">?? ??</p>
+                <p className="text-xs font-semibold text-[#94a3b8]">아이 정보</p>
                 <div className="mt-2 grid gap-x-4 gap-y-1 text-[13px] text-[#1f2937] md:grid-cols-2">
-                  <p>??: {patientInfo.name || "???"}</p>
-                  <p>??: {formatSex(patientInfo.sex)}</p>
-                  <p>????: {patientInfo.birthDate || "-"}</p>
-                  <p>?? ??: {measurementRange}</p>
-                  {patientInfo.boneAge && <p>???: {patientInfo.boneAge}</p>}
-                  {patientInfo.boneAgeDate && <p>??? ???: {patientInfo.boneAgeDate}</p>}
+                  <p>이름: {patientInfo.name || "미입력"}</p>
+                  <p>성별: {formatSex(patientInfo.sex)}</p>
+                  <p>생년월일: {patientInfo.birthDate || "-"}</p>
+                  <p>측정 기간: {measurementRange}</p>
+                  {patientInfo.boneAge && <p>골연령: {patientInfo.boneAge}</p>}
+                  {patientInfo.boneAgeDate && <p>골연령 검사일: {patientInfo.boneAgeDate}</p>}
                   {hormoneEntries.length > 0 ? (
                     <div className="md:col-span-2 pt-1 text-xs text-[#475569]">
-                      <p className="font-semibold text-[#64748b]">??? ??</p>
+                      <p className="font-semibold text-[#64748b]">호르몬 수치</p>
                       {patientInfo.hormoneTestDate && (
                         <p className="text-[11px] text-[#64748b]">
-                          ???: {patientInfo.hormoneTestDate}
+                          검사일: {patientInfo.hormoneTestDate}
                         </p>
                       )}
                       <ul className="mt-1 space-y-0.5">
@@ -324,44 +328,44 @@ export default function PrintPage() {
                     </div>
                   ) : (
                     <p className="md:col-span-2 text-[11px] text-[#94a3b8]">
-                      ??? ??: {hormoneSummary}
+                      호르몬 수치: {hormoneSummary}
                     </p>
                   )}
                 </div>
               </div>
 
               <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
-                <p className="text-xs font-semibold text-[#94a3b8]">?? ?? ??</p>
+                <p className="text-xs font-semibold text-[#94a3b8]">최근 측정 요약</p>
                 {latestMeasurement ? (
                   <div className="mt-2 grid gap-x-4 gap-y-1 text-[13px] text-[#1f2937] md:grid-cols-2">
-                    <p>??? {latestMeasurement.date}</p>
+                    <p>측정일 {latestMeasurement.date}</p>
                     <p>
-                      ? {latestMeasurement.heightCm ?? "-"} cm{" "}
+                      키 {latestMeasurement.heightCm ?? "-"} cm{" "}
                       {latestHeightPercentile !== null
-                        ? `(?${latestHeightPercentile.toFixed(1)}???)`
+                        ? `(키${latestHeightPercentile.toFixed(1)}백분위)`
                         : ""}
                     </p>
                     <p>
-                      ??? {latestMeasurement.weightKg ?? "-"} kg{" "}
+                      몸무게 {latestMeasurement.weightKg ?? "-"} kg{" "}
                       {latestWeightPercentile !== null
-                        ? `(???${latestWeightPercentile.toFixed(1)}???)`
+                        ? `(몸무게${latestWeightPercentile.toFixed(1)}백분위)`
                         : ""}
                     </p>
                     <p>
-                      ??: {measurementSpanMonths !== null ? `${measurementSpanMonths}??` : "-"}
+                      기간: {measurementSpanMonths !== null ? `${measurementSpanMonths}개월` : "-"}
                     </p>
-                    <p>??? {heightDelta !== null ? `${heightDelta} cm` : "-"}</p>
-                    <p>????? {weightDelta !== null ? `${weightDelta} kg` : "-"}</p>
+                    <p>키변화 {heightDelta !== null ? `${heightDelta} cm` : "-"}</p>
+                    <p>몸무게변화 {weightDelta !== null ? `${weightDelta} kg` : "-"}</p>
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-[#64748b]">?? ??? ????.</p>
+                  <p className="mt-2 text-sm text-[#64748b]">측정 기록이 없습니다.</p>
                 )}
               </div>
 
               <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
-                <p className="text-xs font-semibold text-[#94a3b8]">?? ??</p>
+                <p className="text-xs font-semibold text-[#94a3b8]">치료 기간</p>
                 {therapyCourses.length === 0 ? (
-                  <p className="mt-2 text-sm text-[#64748b]">??? ??? ????.</p>
+                  <p className="mt-2 text-sm text-[#64748b]">기록된 치료가 없습니다.</p>
                 ) : (
                   <ul className="mt-2 space-y-1 text-[13px] text-[#1f2937]">
                     {therapyCourses.map((course) => {
@@ -370,8 +374,8 @@ export default function PrintPage() {
                       return (
                         <li key={course.id}>
                           {course.drug}
-                          {doseLabel} ? {course.startDate}
-                          {course.endDate ? ` ~ ${course.endDate}` : " (?? ?)"}
+                          {doseLabel} · {course.startDate}
+                          {course.endDate ? ` ~ ${course.endDate}` : " (진행 중)"}
                         </li>
                       );
                     })}
@@ -382,15 +386,15 @@ export default function PrintPage() {
 
             <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-[#94a3b8]">?? ??</p>
+                <p className="text-xs font-semibold text-[#94a3b8]">성장 차트</p>
                 <span className="text-[11px] text-[#94a3b8]">
-                  {sortedMeasurements.length}?
+                  {sortedMeasurements.length}건
                 </span>
               </div>
               <div className="mt-2 h-[220px] w-full">
                 {sortedMeasurements.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-xs text-[#94a3b8]">
-                    ??? ??? ??? ????.
+                    차트를 표시할 기록이 없습니다.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -445,27 +449,27 @@ export default function PrintPage() {
           <section className="relative overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white via-white to-[#f8fafc] p-5 shadow-sm print-avoid-break">
             <div className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-[#818cf8] via-[#60a5fa] to-[#34d399] opacity-70" />
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-[#0f172a]">??? ?? ??</p>
+              <p className="text-sm font-semibold text-[#0f172a]">보호자 설명 요약</p>
               {status === "loading" && (
-                <span className="text-xs text-[#94a3b8]">?? ?? ?...</span>
+                <span className="text-xs text-[#94a3b8]">요약 생성 중...</span>
               )}
             </div>
             <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#1f2937]">
-              {status === "loading" ? "??? ?? ????..." : summary.text}
+              {status === "loading" ? "요약을 생성 중입니다..." : summary.text}
             </div>
             {summary.debugReason && (
               <p className="mt-3 text-[11px] text-[#94a3b8]">
-                ?? ??: {summary.debugReason}
+                오류 원인: {summary.debugReason}
               </p>
             )}
           </section>
 
           <footer className="border-t border-[#e2e8f0] pt-3 text-xs text-[#94a3b8]">
-            ??? ??? ????, ??? ??? ?? ???? ??????.
+            보호자 설명용 요약이며, 의료적 판단은 담당 의료진과 상담해주세요.
           </footer>
 
           <div className="mt-auto pt-6 text-center text-2xl font-bold text-[#0f172a]">
-            ??? ??????
+            신익순 소아청소년과
           </div>
         </section>
       </div>
