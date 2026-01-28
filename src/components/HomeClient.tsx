@@ -133,7 +133,9 @@ const defaultChildInfo: ChildInfo = {
   heightCm: "",
   weightKg: "",
   boneAge: "",
+  boneAgeDate: "",
   hormoneLevels: {},
+  hormoneTestDate: "",
 };
 
 const hasHormoneValues = (levels: Record<string, string> | undefined) =>
@@ -334,7 +336,7 @@ export default function HomeClient() {
     const handle = setTimeout(async () => {
       const { data, error } = await supabase
         .from("patients")
-        .select("chart_number, name, birth_date, sex, bone_age, hormone_levels")
+        .select("chart_number, name, birth_date, sex, bone_age, bone_age_date, hormone_levels, hormone_test_date")
         .ilike("chart_number", `${query}%`)
         .order("chart_number", { ascending: true })
         .limit(6);
@@ -457,7 +459,9 @@ export default function HomeClient() {
             birth_date: childInfo.birthDate,
             sex: childInfo.sex,
             bone_age: childInfo.boneAge || null,
+            bone_age_date: childInfo.boneAgeDate || null,
             hormone_levels: hormonePayload,
+            hormone_test_date: childInfo.hormoneTestDate || null,
           },
           { onConflict: "chart_number" }
         )
@@ -578,16 +582,18 @@ export default function HomeClient() {
       ? childInfo.hormoneLevels
       : null;
     const { data: patient, error: patientError } = await supabase
-      .from("patients")
-      .upsert(
-        {
-          chart_number: childInfo.chartNumber,
-          name: childInfo.name,
-          birth_date: childInfo.birthDate,
-          sex: childInfo.sex,
-          bone_age: childInfo.boneAge || null,
-          hormone_levels: hormonePayload,
-        },
+        .from("patients")
+        .upsert(
+          {
+            chart_number: childInfo.chartNumber,
+            name: childInfo.name,
+            birth_date: childInfo.birthDate,
+            sex: childInfo.sex,
+            bone_age: childInfo.boneAge || null,
+            bone_age_date: childInfo.boneAgeDate || null,
+            hormone_levels: hormonePayload,
+            hormone_test_date: childInfo.hormoneTestDate || null,
+          },
         { onConflict: "chart_number" }
       )
       .select("id")
@@ -731,7 +737,7 @@ export default function HomeClient() {
     setLoadStatus("최근 기록을 불러오는 중...");
     const { data: patient, error: patientError } = await supabase
       .from("patients")
-      .select("id, chart_number, name, birth_date, sex, bone_age, hormone_levels")
+      .select("id, chart_number, name, birth_date, sex, bone_age, bone_age_date, hormone_levels, hormone_test_date")
       .eq("chart_number", chartNumber)
       .single();
 
@@ -760,10 +766,12 @@ export default function HomeClient() {
       birthDate: patient.birth_date,
       sex: patient.sex,
       boneAge: patient.bone_age ?? prev.boneAge,
+      boneAgeDate: patient.bone_age_date ?? prev.boneAgeDate,
       hormoneLevels:
         patient.hormone_levels && typeof patient.hormone_levels === "object"
           ? patient.hormone_levels
           : prev.hormoneLevels,
+      hormoneTestDate: patient.hormone_test_date ?? prev.hormoneTestDate,
       measurementDate: latest?.measurement_date ?? prev.measurementDate,
       heightCm: latest?.height_cm?.toString() ?? prev.heightCm,
       weightKg: latest?.weight_kg?.toString() ?? prev.weightKg,

@@ -18,7 +18,9 @@ export type ChildInfo = {
   heightCm: string;
   weightKg: string;
   boneAge: string;
+  boneAgeDate: string;
   hormoneLevels: HormoneLevels;
+  hormoneTestDate: string;
 };
 
 interface ChildInfoFormProps {
@@ -84,16 +86,16 @@ export default function ChildInfoForm({
   );
 
   useEffect(() => {
-    if (data.boneAge && !showBoneAge) {
+    if ((data.boneAge || data.boneAgeDate) && !showBoneAge) {
       setShowBoneAge(true);
     }
     const hasHormone = Object.values(data.hormoneLevels ?? {}).some(
       (value) => value && value.trim() !== ""
     );
-    if (hasHormone && !showHormoneLevels) {
+    if ((hasHormone || data.hormoneTestDate) && !showHormoneLevels) {
       setShowHormoneLevels(true);
     }
-  }, [data.boneAge, data.hormoneLevels, showBoneAge, showHormoneLevels]);
+  }, [data.boneAge, data.boneAgeDate, data.hormoneLevels, data.hormoneTestDate, showBoneAge, showHormoneLevels]);
 
   return (
     <Card className="w-full">
@@ -239,12 +241,30 @@ export default function ChildInfoForm({
               placeholder="예: 7세 3개월"
               className={inputTone}
             />
+            <Label htmlFor="boneAgeDate">검사일</Label>
+            <Input
+              id="boneAgeDate"
+              type="date"
+              value={data.boneAgeDate}
+              onChange={(e) => onFieldChange("boneAgeDate", e.target.value)}
+              className={inputTone}
+            />
           </div>
         )}
         {showHormoneLevels && (
           <div className="space-y-3">
             <p className="text-sm font-semibold text-[#1a1c24]">호르몬 수치</p>
             <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1 md:col-span-2">
+                <Label htmlFor="hormoneTestDate">검사일</Label>
+                <Input
+                  id="hormoneTestDate"
+                  type="date"
+                  value={data.hormoneTestDate}
+                  onChange={(e) => onFieldChange("hormoneTestDate", e.target.value)}
+                  className={inputTone}
+                />
+              </div>
               {hormoneFields.map((field) => (
                 <div key={field.key} className="space-y-1">
                   <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>

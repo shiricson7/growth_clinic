@@ -280,13 +280,11 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
   const weightValues = chartData
     .map((item) => item.weight)
     .filter((value): value is number => typeof value === "number");
-  const allValues = [...heightValues, ...weightValues];
-
   const hasHeight = heightValues.length > 0;
   const hasWeight = weightValues.length > 0;
 
-  const leftDomain = buildDomain(allValues.length ? allValues : heightValues);
-  const rightDomain = buildDomain(weightValues);
+  const leftDomain = buildDomain(hasHeight ? heightValues : weightValues);
+  const rightDomain = buildDomain(hasWeight ? weightValues : heightValues);
   const bandAxisId = hasHeight ? "left" : "right";
   const bandDomain = hasHeight ? leftDomain : rightDomain;
 
@@ -360,6 +358,14 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
                 axisLine={false}
                 width={40}
                 hide={!hasHeight}
+                label={{
+                  value: "키 (cm)",
+                  angle: -90,
+                  position: "insideLeft",
+                  fill: "#94a3b8",
+                  fontSize: 10,
+                  offset: 10,
+                }}
               />
               <YAxis
                 yAxisId="right"
@@ -370,6 +376,14 @@ function ModernGrowthChart({ measurements, therapyCourses, birthDate, sex }: Mod
                 axisLine={false}
                 width={40}
                 hide={!hasWeight}
+                label={{
+                  value: "몸무게 (kg)",
+                  angle: 90,
+                  position: "insideRight",
+                  fill: "#94a3b8",
+                  fontSize: 10,
+                  offset: 10,
+                }}
               />
 
               {normalizedCourses.map((course) => {

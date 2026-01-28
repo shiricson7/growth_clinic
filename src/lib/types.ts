@@ -35,5 +35,7 @@ export type PatientInfo = {
   sex: "male" | "female" | "";
   birthDate: string;
   boneAge?: string;
+  boneAgeDate?: string;
   hormoneLevels?: HormoneLevels | string;
+  hormoneTestDate?: string;
 };

@@ -80,7 +80,9 @@ function PageContent() {
     sex: "",
     birthDate: "",
     boneAge: "",
+    boneAgeDate: "",
     hormoneLevels: {},
+    hormoneTestDate: "",
   });
   const [hydrated, setHydrated] = useState(false);
   const [showBoneAge, setShowBoneAge] = useState(false);
@@ -167,7 +169,9 @@ function PageContent() {
               birth_date: patientInfo.birthDate,
               sex: patientInfo.sex,
               bone_age: patientInfo.boneAge || null,
+              bone_age_date: patientInfo.boneAgeDate || null,
               hormone_levels: hormonePayload,
+              hormone_test_date: patientInfo.hormoneTestDate || null,
             },
             { onConflict: "chart_number" }
           )
@@ -209,7 +213,9 @@ function PageContent() {
     patientInfo.birthDate,
     patientInfo.sex,
     patientInfo.boneAge,
+    patientInfo.boneAgeDate,
     patientInfo.hormoneLevels,
+    patientInfo.hormoneTestDate,
     measurements,
   ]);
 
@@ -267,7 +273,7 @@ function PageContent() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (patientInfo.boneAge && !showBoneAge) {
+    if ((patientInfo.boneAge || patientInfo.boneAgeDate) && !showBoneAge) {
       setShowBoneAge(true);
     }
     const hormoneValues =
@@ -276,10 +282,18 @@ function PageContent() {
         : Object.values(patientInfo.hormoneLevels ?? {}).some(
             (value) => value && value.trim() !== ""
           );
-    if (hormoneValues && !showHormoneLevels) {
+    if ((hormoneValues || patientInfo.hormoneTestDate) && !showHormoneLevels) {
       setShowHormoneLevels(true);
     }
-  }, [hydrated, patientInfo.boneAge, patientInfo.hormoneLevels, showBoneAge, showHormoneLevels]);
+  }, [
+    hydrated,
+    patientInfo.boneAge,
+    patientInfo.boneAgeDate,
+    patientInfo.hormoneLevels,
+    patientInfo.hormoneTestDate,
+    showBoneAge,
+    showHormoneLevels,
+  ]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -371,7 +385,9 @@ function PageContent() {
       sex: "",
       birthDate: "",
       boneAge: "",
+      boneAgeDate: "",
       hormoneLevels: {},
+      hormoneTestDate: "",
     });
     setShowBoneAge(false);
     setShowHormoneLevels(false);
@@ -428,7 +444,7 @@ function PageContent() {
     setLoadStatus("환자 데이터를 불러오는 중...");
     const { data: patient, error: patientError } = await supabase
       .from("patients")
-      .select("id, chart_number, name, birth_date, sex, bone_age, hormone_levels")
+      .select("id, chart_number, name, birth_date, sex, bone_age, bone_age_date, hormone_levels, hormone_test_date")
       .eq("chart_number", trimmed)
       .single();
 
@@ -462,7 +478,9 @@ function PageContent() {
       sex: patient.sex ?? "",
       birthDate: patient.birth_date ?? "",
       boneAge: patient.bone_age ?? "",
+      boneAgeDate: patient.bone_age_date ?? "",
       hormoneLevels: normalizeHormoneLevels(patient.hormone_levels),
+      hormoneTestDate: patient.hormone_test_date ?? "",
     });
     setMeasurements(sortMeasurements(mappedMeasurements));
     setTherapyCourses([]);
@@ -753,12 +771,38 @@ function PageContent() {
                       }
                       placeholder="예: 7세 3개월"
                     />
+                    <Label htmlFor="boneAgeDate">검사일</Label>
+                    <Input
+                      id="boneAgeDate"
+                      type="date"
+                      value={patientInfo.boneAgeDate ?? ""}
+                      onChange={(event) =>
+                        setPatientInfo((prev) => ({
+                          ...prev,
+                          boneAgeDate: event.target.value,
+                        }))
+                      }
+                    />
                   </div>
                 )}
                 {showHormoneLevels && (
                   <div className="mt-3 space-y-3">
                     <p className="text-sm font-semibold text-[#1a1c24]">호르몬 수치</p>
                     <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1 md:col-span-2">
+                        <Label htmlFor="hormoneTestDate">검사일</Label>
+                        <Input
+                          id="hormoneTestDate"
+                          type="date"
+                          value={patientInfo.hormoneTestDate ?? ""}
+                          onChange={(event) =>
+                            setPatientInfo((prev) => ({
+                              ...prev,
+                              hormoneTestDate: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
                       {hormoneFields.map((field) => (
                         <div key={field.key} className="space-y-1">
                           <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>

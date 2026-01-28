@@ -12,7 +12,9 @@ type SavePayload = {
   heightCm?: string | number | null;
   weightKg?: string | number | null;
   boneAge?: string | null;
+  boneAgeDate?: string | null;
   hormoneLevels?: Record<string, string> | string | null;
+  hormoneTestDate?: string | null;
 };
 
 function isValidDate(value: string) {
@@ -37,7 +39,9 @@ export async function POST(request: Request) {
       heightCm,
       weightKg,
       boneAge,
+      boneAgeDate,
       hormoneLevels,
+      hormoneTestDate,
     } = body;
 
     if (!chartNumber || !name || !birthDate || !sex || !measurementDate) {
@@ -50,6 +54,18 @@ export async function POST(request: Request) {
     if (!isValidDate(birthDate) || !isValidDate(measurementDate)) {
       return NextResponse.json(
         { error: "날짜 형식이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+    if (boneAgeDate && !isValidDate(boneAgeDate)) {
+      return NextResponse.json(
+        { error: "골연령 검사일 형식이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+    if (hormoneTestDate && !isValidDate(hormoneTestDate)) {
+      return NextResponse.json(
+        { error: "호르몬 검사일 형식이 올바르지 않습니다." },
         { status: 400 }
       );
     }
@@ -68,7 +84,9 @@ export async function POST(request: Request) {
           birth_date: birthDate,
           sex,
           bone_age: boneAge ?? null,
+          bone_age_date: boneAgeDate ?? null,
           hormone_levels: hormoneLevels ?? null,
+          hormone_test_date: hormoneTestDate ?? null,
         },
         { onConflict: "chart_number" }
       )
@@ -131,7 +149,7 @@ export async function GET(request: Request) {
   }
   const { data: patient, error: patientError } = await supabase
     .from("patients")
-    .select("id, chart_number, name, birth_date, sex, bone_age, hormone_levels")
+    .select("id, chart_number, name, birth_date, sex, bone_age, bone_age_date, hormone_levels, hormone_test_date")
     .eq("chart_number", chartNumber)
     .single();
 
@@ -164,7 +182,9 @@ export async function GET(request: Request) {
       birthDate: patient.birth_date,
       sex: patient.sex,
       boneAge: patient.bone_age ?? null,
+      boneAgeDate: patient.bone_age_date ?? null,
       hormoneLevels: patient.hormone_levels ?? null,
+      hormoneTestDate: patient.hormone_test_date ?? null,
     },
     measurement: measurement
       ? {
