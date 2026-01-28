@@ -8,7 +8,7 @@ type SavePayload = {
   name: string;
   birthDate: string;
   sex: Sex;
-  measurementDate: string;
+  measurementDate?: string | null;
   heightCm?: string | number | null;
   weightKg?: string | number | null;
   boneAge?: string | null;
@@ -44,20 +44,26 @@ export async function POST(request: Request) {
       hormoneTestDate,
     } = body;
 
-    if (!chartNumber || !name || !birthDate || !sex || !measurementDate) {
+    if (!chartNumber || !name || !birthDate || !sex) {
       return NextResponse.json(
         { error: "필수 항목이 누락되었습니다." },
         { status: 400 }
       );
     }
 
-    if (!isValidDate(birthDate) || !isValidDate(measurementDate)) {
+    if (!isValidDate(birthDate)) {
       return NextResponse.json(
         { error: "날짜 형식이 올바르지 않습니다." },
         { status: 400 }
       );
     }
-    if (boneAgeDate && !isValidDate(boneAgeDate)) {
+        if (measurementDate && !isValidDate(measurementDate)) {
+      return NextResponse.json(
+        { error: "??? ??? ???? ????." },
+        { status: 400 }
+      );
+    }
+if (boneAgeDate && !isValidDate(boneAgeDate)) {
       return NextResponse.json(
         { error: "골연령 검사일 형식이 올바르지 않습니다." },
         { status: 400 }
@@ -100,24 +106,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const measurementPayload = {
-      patient_id: patient.id,
-      measurement_date: measurementDate,
-      height_cm: heightCm !== undefined && heightCm !== null && heightCm !== "" ? Number(heightCm) : null,
-      weight_kg: weightKg !== undefined && weightKg !== null && weightKg !== "" ? Number(weightKg) : null,
-    };
+    let measurement = null;
+    if (measurementDate) {
+      const measurementPayload = {
+        patient_id: patient.id,
+        measurement_date: measurementDate,
+        height_cm: heightCm !== undefined && heightCm !== null && heightCm !== "" ? Number(heightCm) : null,
+        weight_kg: weightKg !== undefined && weightKg !== null && weightKg !== "" ? Number(weightKg) : null,
+      };
 
-    const { data: measurement, error: measurementError } = await supabase
-      .from("measurements")
-      .insert(measurementPayload)
-      .select("*")
-      .single();
+      const { data: savedMeasurement, error: measurementError } = await supabase
+        .from("measurements")
+        .insert(measurementPayload)
+        .select("*")
+        .single();
 
-    if (measurementError) {
-      return NextResponse.json(
-        { error: measurementError.message ?? "측정값 저장에 실패했습니다." },
-        { status: 500 }
-      );
+      if (measurementError) {
+        return NextResponse.json(
+          { error: measurementError.message ?? "??? ??? ??????." },
+          { status: 500 }
+        );
+      }
+
+      measurement = savedMeasurement;
     }
 
     return NextResponse.json({ patientId: patient.id, measurement });

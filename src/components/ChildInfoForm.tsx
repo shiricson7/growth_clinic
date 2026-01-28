@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,8 @@ export default function ChildInfoForm({
   const inputTone = isPristine ? "text-[#94a3b8]" : "";
   const [showBoneAge, setShowBoneAge] = useState(false);
   const [showHormoneLevels, setShowHormoneLevels] = useState(false);
+  const boneAgeToggledRef = useRef(false);
+  const hormoneToggledRef = useRef(false);
 
   const hormoneFields = useMemo(
     () => [
@@ -85,17 +87,25 @@ export default function ChildInfoForm({
     []
   );
 
+  const hasBoneAgeValue = Boolean(data.boneAge?.trim() || data.boneAgeDate);
+  const hasHormoneValue = Object.values(data.hormoneLevels ?? {}).some(
+    (value) => value && value.trim() !== ""
+  );
+
   useEffect(() => {
-    if ((data.boneAge || data.boneAgeDate) && !showBoneAge) {
+    if (!boneAgeToggledRef.current && hasBoneAgeValue && !showBoneAge) {
       setShowBoneAge(true);
     }
-    const hasHormone = Object.values(data.hormoneLevels ?? {}).some(
-      (value) => value && value.trim() !== ""
-    );
-    if ((hasHormone || data.hormoneTestDate) && !showHormoneLevels) {
+    if (!hormoneToggledRef.current && (hasHormoneValue || data.hormoneTestDate) && !showHormoneLevels) {
       setShowHormoneLevels(true);
     }
-  }, [data.boneAge, data.boneAgeDate, data.hormoneLevels, data.hormoneTestDate, showBoneAge, showHormoneLevels]);
+    if (!hasBoneAgeValue && !showBoneAge) {
+      boneAgeToggledRef.current = false;
+    }
+    if (!hasHormoneValue && !data.hormoneTestDate && !showHormoneLevels) {
+      hormoneToggledRef.current = false;
+    }
+  }, [data.hormoneTestDate, hasBoneAgeValue, hasHormoneValue, showBoneAge, showHormoneLevels]);
 
   return (
     <Card className="w-full">
@@ -217,7 +227,10 @@ export default function ChildInfoForm({
               type="checkbox"
               className="h-4 w-4 accent-[#1a1c24]"
               checked={showBoneAge}
-              onChange={(event) => setShowBoneAge(event.target.checked)}
+              onChange={(event) => {
+                boneAgeToggledRef.current = true;
+                setShowBoneAge(event.target.checked);
+              }}
             />
             골연령 입력
           </label>
@@ -226,7 +239,10 @@ export default function ChildInfoForm({
               type="checkbox"
               className="h-4 w-4 accent-[#1a1c24]"
               checked={showHormoneLevels}
-              onChange={(event) => setShowHormoneLevels(event.target.checked)}
+              onChange={(event) => {
+                hormoneToggledRef.current = true;
+                setShowHormoneLevels(event.target.checked);
+              }}
             />
             호르몬 수치 입력
           </label>

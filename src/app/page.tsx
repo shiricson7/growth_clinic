@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import {
@@ -87,6 +87,8 @@ function PageContent() {
   const [hydrated, setHydrated] = useState(false);
   const [showBoneAge, setShowBoneAge] = useState(false);
   const [showHormoneLevels, setShowHormoneLevels] = useState(false);
+  const boneAgeToggledRef = useRef(false);
+  const hormoneToggledRef = useRef(false);
   const [loadStatus, setLoadStatus] = useState("");
   const [chartSuggestions, setChartSuggestions] = useState<ChartSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -271,25 +273,32 @@ function PageContent() {
     setIsSearching(false);
   }, [hydrated, patientInfo.chartNumber, session, supabase]);
 
+  const hasBoneAgeValue = Boolean(patientInfo.boneAge?.trim() || patientInfo.boneAgeDate);
+  const hasHormoneValue =
+    typeof patientInfo.hormoneLevels === "string"
+      ? patientInfo.hormoneLevels.trim()
+      : Object.values(patientInfo.hormoneLevels ?? {}).some(
+          (value) => value && value.trim() !== ""
+        );
+
   useEffect(() => {
     if (!hydrated) return;
-    if ((patientInfo.boneAge || patientInfo.boneAgeDate) && !showBoneAge) {
+    if (!boneAgeToggledRef.current && hasBoneAgeValue && !showBoneAge) {
       setShowBoneAge(true);
     }
-    const hormoneValues =
-      typeof patientInfo.hormoneLevels === "string"
-        ? patientInfo.hormoneLevels.trim()
-        : Object.values(patientInfo.hormoneLevels ?? {}).some(
-            (value) => value && value.trim() !== ""
-          );
-    if ((hormoneValues || patientInfo.hormoneTestDate) && !showHormoneLevels) {
+    if (!hormoneToggledRef.current && (hasHormoneValue || patientInfo.hormoneTestDate) && !showHormoneLevels) {
       setShowHormoneLevels(true);
+    }
+    if (!hasBoneAgeValue && !showBoneAge) {
+      boneAgeToggledRef.current = false;
+    }
+    if (!hasHormoneValue && !patientInfo.hormoneTestDate && !showHormoneLevels) {
+      hormoneToggledRef.current = false;
     }
   }, [
     hydrated,
-    patientInfo.boneAge,
-    patientInfo.boneAgeDate,
-    patientInfo.hormoneLevels,
+    hasBoneAgeValue,
+    hasHormoneValue,
     patientInfo.hormoneTestDate,
     showBoneAge,
     showHormoneLevels,
@@ -743,7 +752,10 @@ function PageContent() {
                       type="checkbox"
                       className="h-4 w-4 accent-[#1a1c24]"
                       checked={showBoneAge}
-                      onChange={(event) => setShowBoneAge(event.target.checked)}
+                      onChange={(event) => {
+                        boneAgeToggledRef.current = true;
+                        setShowBoneAge(event.target.checked);
+                      }}
                     />
                     골연령 입력
                   </label>
@@ -752,7 +764,10 @@ function PageContent() {
                       type="checkbox"
                       className="h-4 w-4 accent-[#1a1c24]"
                       checked={showHormoneLevels}
-                      onChange={(event) => setShowHormoneLevels(event.target.checked)}
+                      onChange={(event) => {
+                        hormoneToggledRef.current = true;
+                        setShowHormoneLevels(event.target.checked);
+                      }}
                     />
                     호르몬 수치 입력
                   </label>

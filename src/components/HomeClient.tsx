@@ -474,35 +474,47 @@ export default function HomeClient() {
       }
       setPatientId(patient.id);
 
-      const { error: measurementError } = await supabase
-        .from("measurements")
-        .insert({
-          patient_id: patient.id,
-          measurement_date: childInfo.measurementDate,
-          height_cm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
-          weight_kg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
+      const hasMeasurementValues = Boolean(childInfo.heightCm || childInfo.weightKg);
+      const measurementDateValid =
+        Boolean(childInfo.measurementDate) && isValidIsoDate(childInfo.measurementDate);
+
+      if (measurementDateValid && hasMeasurementValues) {
+        const { error: measurementError } = await supabase
+          .from("measurements")
+          .insert({
+            patient_id: patient.id,
+            measurement_date: childInfo.measurementDate,
+            height_cm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
+            weight_kg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
+          });
+
+        if (measurementError) {
+          setSaveStatus(measurementError.message ?? "??? ??? ?????.");
+          return;
+        }
+
+        setHistory((prev) => {
+          const entry = {
+            measurementDate: childInfo.measurementDate,
+            heightCm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
+            weightKg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
+          };
+          const filtered = prev.filter((item) => item.measurementDate !== entry.measurementDate);
+          return [entry, ...filtered].sort((a, b) =>
+            a.measurementDate < b.measurementDate ? 1 : -1
+          );
         });
 
-      if (measurementError) {
-        setSaveStatus(measurementError.message ?? "측정값 저장에 실패했어요.");
-        return;
-      }
-
-      setHistory((prev) => {
-        const entry = {
-          measurementDate: childInfo.measurementDate,
-          heightCm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
-          weightKg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
-        };
-        const filtered = prev.filter((item) => item.measurementDate !== entry.measurementDate);
-        return [entry, ...filtered].sort((a, b) =>
-          a.measurementDate < b.measurementDate ? 1 : -1
+        setSaveStatus("?? ??! (RRN? ???? ???)");
+        setHeightLocked(Boolean(childInfo.heightCm));
+        setWeightLocked(Boolean(childInfo.weightKg));
+      } else {
+        setSaveStatus(
+          "?? ?? ?? ??! ???/?/???? ?? ?? ??? ???? ????."
         );
-      });
-
-      setSaveStatus("저장 완료! (RRN은 저장하지 않았어요)");
-      setHeightLocked(Boolean(childInfo.heightCm));
-      setWeightLocked(Boolean(childInfo.weightKg));
+        setHeightLocked(false);
+        setWeightLocked(false);
+      }
     } catch (error) {
       setSaveStatus("저장 중 오류가 발생했어요.");
     }
