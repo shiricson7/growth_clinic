@@ -14,6 +14,15 @@ type SummaryResponse = {
   debugReason?: string;
 };
 
+type SnapshotTreatment = {
+  id: string;
+  type: "GH" | "GnRH";
+  label: string;
+  startDate: string;
+  endDate?: string | null;
+  note?: string;
+};
+
 const formatSex = (sex: PatientInfo["sex"]) =>
   sex === "male" ? "남아" : sex === "female" ? "여아" : "-";
 
@@ -224,16 +233,19 @@ export default function PrintPage() {
   const snapshotUpdatedAt =
     latestMeasurement?.date ?? format(new Date(), "yyyy-MM-dd");
 
-  const snapshotTreatments = useMemo(
+  const snapshotTreatments = useMemo<SnapshotTreatment[]>(
     () =>
-      therapyCourses.map((course) => ({
-        id: course.id,
-        type: course.drug === "GH" ? "GH" : "GnRH",
-        label: course.drug,
-        startDate: course.startDate,
-        endDate: course.endDate ?? null,
-        note: course.note,
-      })),
+      therapyCourses.map((course) => {
+        const mappedType = course.drug === "GH" ? "GH" : "GnRH";
+        return {
+          id: course.id,
+          type: mappedType,
+          label: mappedType,
+          startDate: course.startDate,
+          endDate: course.endDate ?? null,
+          note: course.note,
+        };
+      }),
     [therapyCourses]
   );
 
