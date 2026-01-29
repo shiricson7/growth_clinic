@@ -39,7 +39,10 @@ export async function POST(request: Request) {
       .single();
 
     if (patientError || !patient) {
-      return NextResponse.json({ error: "환자 정보를 찾을 수 없습니다." }, { status: 404 });
+      return NextResponse.json(
+        { error: patientError?.message ?? "환자 정보를 찾을 수 없습니다." },
+        { status: 404 }
+      );
     }
 
     const { data: existingPanel, error: existingPanelError } = await supabase
@@ -50,7 +53,10 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingPanelError) {
-      return NextResponse.json({ error: "검사 패널 저장에 실패했습니다." }, { status: 500 });
+      return NextResponse.json(
+        { error: existingPanelError.message ?? "검사 패널 저장에 실패했습니다." },
+        { status: 500 }
+      );
     }
 
     const panelPayload = {
@@ -69,7 +75,10 @@ export async function POST(request: Request) {
         .eq("id", panelId);
 
       if (updateError) {
-        return NextResponse.json({ error: "검사 패널 저장에 실패했습니다." }, { status: 500 });
+        return NextResponse.json(
+          { error: updateError.message ?? "검사 패널 저장에 실패했습니다." },
+          { status: 500 }
+        );
       }
     } else {
       const { data: inserted, error: insertError } = await supabase
@@ -79,7 +88,10 @@ export async function POST(request: Request) {
         .single();
 
       if (insertError || !inserted) {
-        return NextResponse.json({ error: "검사 패널 저장에 실패했습니다." }, { status: 500 });
+        return NextResponse.json(
+          { error: insertError?.message ?? "검사 패널 저장에 실패했습니다." },
+          { status: 500 }
+        );
       }
       panelId = inserted.id;
     }
