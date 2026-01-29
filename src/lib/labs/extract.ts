@@ -11,9 +11,9 @@ async function extractTextWithOcr(buffer: Buffer): Promise<TextExtractionResult>
   const loadingTask = pdfjsLib.getDocument({ data: buffer });
   const pdfDoc = await loadingTask.promise;
   const pages: string[] = [];
-  const worker = (await createWorker()) as {
+  const worker = (await createWorker()) as unknown as {
     recognize: (image: Buffer) => Promise<{ data: { text: string } }>;
-    terminate: () => Promise<void>;
+    terminate: () => Promise<unknown>;
     loadLanguage?: (lang: string) => Promise<void>;
     initialize?: (lang: string) => Promise<void>;
   };
