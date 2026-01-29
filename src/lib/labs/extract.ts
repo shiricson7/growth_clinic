@@ -47,9 +47,13 @@ async function extractTextWithOcr(buffer: Buffer): Promise<TextExtractionResult>
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<TextExtractionResult> {
   const parsed = await pdf(buffer);
-  const text = (parsed.text ?? "").trim();
+  const rawText = typeof parsed.text === "string" ? parsed.text : "";
+  const text = rawText.trim();
   if (text.length >= MIN_TEXT_LENGTH) {
-    const pages = text.split(/\f/).map((page) => page.trim()).filter(Boolean);
+    const pages = rawText
+      .split(/\f/)
+      .map((page) => page.trim())
+      .filter(Boolean);
     return {
       pages: pages.length ? pages : [text],
       fullText: text,
