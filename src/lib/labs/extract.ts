@@ -8,7 +8,7 @@ async function extractTextWithOcr(buffer: Buffer): Promise<TextExtractionResult>
   const { createCanvas } = await import("@napi-rs/canvas");
   const { createWorker } = await import("tesseract.js");
 
-  const loadingTask = pdfjsLib.getDocument({ data: buffer, disableWorker: true });
+  const loadingTask = pdfjsLib.getDocument({ data: buffer });
   const pdfDoc = await loadingTask.promise;
   const pages: string[] = [];
   const worker = await createWorker();
