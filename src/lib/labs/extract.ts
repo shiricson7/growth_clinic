@@ -4,7 +4,7 @@ import type { TextExtractionResult } from "./types";
 const MIN_TEXT_LENGTH = 40;
 
 async function extractTextWithOcr(buffer: Buffer): Promise<TextExtractionResult> {
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.js");
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const { createCanvas } = await import("@napi-rs/canvas");
   const { createWorker } = await import("tesseract.js");
 
