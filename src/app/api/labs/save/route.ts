@@ -42,29 +42,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "환자 정보를 찾을 수 없습니다." }, { status: 404 });
     }
 
-    const { data: panel, error: panelError } = await supabase
+    const { data: existingPanel, error: existingPanelError } = await supabase
       .from("lab_panels")
-      .upsert(
-        {
-          patient_id: patient.id,
-          collected_at: body.collectedAt,
-          source_pdf_url: body.sourcePdfUrl ?? null,
-          extraction_method: body.extractionMethod,
-          raw_text: body.rawText ?? null,
-        },
-        { onConflict: "patient_id,collected_at" }
-      )
       .select("id")
-      .single();
+      .eq("patient_id", patient.id)
+      .eq("collected_at", body.collectedAt)
+      .maybeSingle();
 
-    if (panelError || !panel) {
+    if (existingPanelError) {
       return NextResponse.json({ error: "검사 패널 저장에 실패했습니다." }, { status: 500 });
+    }
+
+    const panelPayload = {
+      patient_id: patient.id,
+      collected_at: body.collectedAt,
+      source_pdf_url: body.sourcePdfUrl ?? null,
+      extraction_method: body.extractionMethod,
+      raw_text: body.rawText ?? null,
+    };
+
+    let panelId = existingPanel?.id ?? null;
+    if (panelId) {
+      const { error: updateError } = await supabase
+        .from("lab_panels")
+        .update(panelPayload)
+        .eq("id", panelId);
+
+      if (updateError) {
+        return NextResponse.json({ error: "검사 패널 저장에 실패했습니다." }, { status: 500 });
+      }
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from("lab_panels")
+        .insert(panelPayload)
+        .select("id")
+        .single();
+
+      if (insertError || !inserted) {
+        return NextResponse.json({ error: "검사 패널 저장에 실패했습니다." }, { status: 500 });
+      }
+      panelId = inserted.id;
     }
 
     const payload = Object.values(body.results ?? {})
       .filter((result) => result.valueRaw && result.valueRaw.trim() !== "")
       .map((result) => ({
-      panel_id: panel.id,
+      panel_id: panelId,
       test_key: result.testKey,
       value_raw: result.valueRaw,
       value_numeric: result.valueNumeric,
@@ -87,7 +110,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ panelId: panel.id });
+    return NextResponse.json({ panelId });
   } catch (error) {
     return NextResponse.json({ error: "서버 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
