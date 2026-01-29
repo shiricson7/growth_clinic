@@ -586,7 +586,17 @@ function PageContent() {
         }),
       });
       if (!response.ok) {
-        throw new Error("save failed");
+        let message = "저장에 실패했습니다.";
+        try {
+          const data = (await response.json()) as { error?: string };
+          if (data?.error) {
+            message = `저장 실패: ${data.error}`;
+          }
+        } catch {
+          // Ignore JSON parse failures
+        }
+        setLabSaveStatus(message);
+        return;
       }
       setLabSaveStatus("저장 완료!");
     } catch (error) {
