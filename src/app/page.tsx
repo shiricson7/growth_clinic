@@ -138,19 +138,26 @@ function PageContent() {
   const [boneAgeInput, setBoneAgeInput] = useState("");
   const [boneAgeDateInput, setBoneAgeDateInput] = useState("");
   const [hormoneTestDateInput, setHormoneTestDateInput] = useState("");
+  const [hormoneInputValues, setHormoneInputValues] = useState<Record<string, string>>({});
 
   const hormoneFields = useMemo(
     () => [
-      { key: "LH", label: "LH" },
-      { key: "FSH", label: "FSH" },
-      { key: "E2", label: "E2" },
-      { key: "Testosterone", label: "Testosterone" },
-      { key: "TSH", label: "TSH" },
-      { key: "fT4", label: "fT4" },
-      { key: "DHEA", label: "DHEA" },
-      { key: "IGF_BP3", label: "IGF-BP3" },
-      { key: "IGF_1", label: "IGF-1" },
-      { key: "HbA1c", label: "HbA1c" },
+      { key: "LH", label: "LH", unitCaption: "mIU/mL", summaryUnit: "mIU/mL" },
+      { key: "FSH", label: "FSH", unitCaption: "mIU/mL", summaryUnit: "mIU/mL" },
+      { key: "E2", label: "E2", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
+      { key: "Testosterone", label: "Testosterone", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
+      { key: "TSH", label: "TSH", unitCaption: "uIU/mL", summaryUnit: "uIU/mL" },
+      { key: "fT4", label: "fT4", unitCaption: "ng/dL", summaryUnit: "ng/dL" },
+      { key: "DHEA", label: "DHEA", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
+      { key: "IGF_BP3", label: "IGF-BP3", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
+      {
+        key: "IGF_1",
+        label: "IGF-1",
+        summaryLabel: "Somatomedin-C",
+        unitCaption: "Somatomedin-C ng/mL",
+        summaryUnit: "ng/mL",
+      },
+      { key: "HbA1c", label: "HbA1c", unitCaption: "%", summaryUnit: "%" },
     ],
     []
   );
@@ -453,6 +460,7 @@ function PageContent() {
     setBoneAgeInput("");
     setBoneAgeDateInput("");
     setHormoneTestDateInput("");
+    setHormoneInputValues({});
     setShowBoneAge(false);
     setShowHormoneLevels(false);
     clearGrowthStorage();
@@ -510,6 +518,7 @@ function PageContent() {
         hormoneTestDate: collectedAtValue,
       }));
     }
+    setHormoneInputValues({});
   };
 
   const parseLabNumeric = (raw: string) => {
@@ -543,6 +552,44 @@ function PageContent() {
       hormoneTestDate: value,
     }));
     setHormoneTestDateInput("");
+  };
+
+  const commitHormoneValue = (key: string, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setHormoneInputValues((prev) => ({
+        ...prev,
+        [key]: "",
+      }));
+      return;
+    }
+    setPatientInfo((prev) => ({
+      ...prev,
+      hormoneLevels: {
+        ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
+          ? prev.hormoneLevels
+          : {}),
+        [key]: trimmed,
+      },
+    }));
+    const labKey = LAB_HORMONE_TO_KEY[key as keyof HormoneLevels];
+    if (labKey) {
+      setLabResults((prev) => ({
+        ...prev,
+        [labKey]: {
+          testKey: labKey,
+          valueRaw: trimmed,
+          valueNumeric: parseLabNumeric(trimmed),
+          unit: prev[labKey]?.unit ?? null,
+          sourceLine: prev[labKey]?.sourceLine ?? "",
+          matchedBy: prev[labKey]?.matchedBy ?? "manual",
+        },
+      }));
+    }
+    setHormoneInputValues((prev) => ({
+      ...prev,
+      [key]: "",
+    }));
   };
 
   const handleImportLabPdf = async () => {
@@ -660,6 +707,7 @@ function PageContent() {
       setBoneAgeInput("");
       setBoneAgeDateInput("");
       setHormoneTestDateInput("");
+      setHormoneInputValues({});
       setLoadStatus("환자 데이터를 불러왔어요.");
       return;
     }
@@ -711,6 +759,7 @@ function PageContent() {
     setBoneAgeInput("");
     setBoneAgeDateInput("");
     setHormoneTestDateInput("");
+    setHormoneInputValues({});
     setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
     setLabCollectedAt(patient.hormone_test_date ?? "");
     setLabMethod(null);
@@ -827,6 +876,28 @@ function PageContent() {
     patientInfo.hormoneTestDate,
     patientInfo.sex,
   ]);
+
+  const boneAgeChronological = useMemo(() => {
+    if (!patientInfo.birthDate || !patientInfo.boneAgeDate) return "";
+    const months = getAgeMonths(patientInfo.birthDate, patientInfo.boneAgeDate);
+    if (!Number.isFinite(months) || months < 0) return "";
+    const years = Math.floor(months / 12);
+    const remaining = months % 12;
+    if (years <= 0) return `${remaining}개월`;
+    return remaining === 0 ? `${years}세` : `${years}세 ${remaining}개월`;
+  }, [patientInfo.birthDate, patientInfo.boneAgeDate]);
+
+  const hormoneSummaryItems = useMemo(() => {
+    return hormoneFields
+      .map((field) => {
+        const raw = hormoneValues[field.key]?.trim();
+        if (!raw) return null;
+        const unit = field.summaryUnit ? ` ${field.summaryUnit}` : "";
+        const label = field.summaryLabel ?? field.label;
+        return `${label} ${raw}${unit}`;
+      })
+      .filter((item): item is string => Boolean(item));
+  }, [hormoneFields, hormoneValues]);
 
   const summaryName = patientInfo.name?.trim() || "아이";
   const heightSummary = latestHeightPercentile !== null
@@ -1082,18 +1153,49 @@ function PageContent() {
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-white/70 bg-white/80 p-3">
                       <p className="text-xs text-[#64748b]">골연령</p>
-                      <p className="mt-1 text-sm font-semibold text-[#1a1c24]">
-                        {patientInfo.boneAge?.trim() ? patientInfo.boneAge : "미입력"}
-                      </p>
-                      <p className="mt-1 text-xs text-[#94a3b8]">
-                        검사일: {patientInfo.boneAgeDate || "-"}
-                      </p>
+                      <div className="mt-1 space-y-1 text-xs text-[#475569]">
+                        <p>
+                          검사일:{" "}
+                          <span className="font-semibold text-[#1a1c24]">
+                            {patientInfo.boneAgeDate || "미입력"}
+                          </span>
+                        </p>
+                        <p>
+                          역연령:{" "}
+                          <span className="font-semibold text-[#1a1c24]">
+                            {boneAgeChronological || "미입력"}
+                          </span>
+                        </p>
+                        <p>
+                          골연령:{" "}
+                          <span className="font-semibold text-[#1a1c24]">
+                            {patientInfo.boneAge?.trim() ? patientInfo.boneAge : "미입력"}
+                          </span>
+                        </p>
+                      </div>
                     </div>
                     <div className="rounded-xl border border-white/70 bg-white/80 p-3">
-                      <p className="text-xs text-[#64748b]">혈액검사 일자</p>
-                      <p className="mt-1 text-sm font-semibold text-[#1a1c24]">
-                        {patientInfo.hormoneTestDate || "미입력"}
+                      <p className="text-xs text-[#64748b]">혈액검사</p>
+                      <p className="mt-1 text-xs text-[#475569]">
+                        검사일:{" "}
+                        <span className="font-semibold text-[#1a1c24]">
+                          {patientInfo.hormoneTestDate || "미입력"}
+                        </span>
                       </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#475569]">
+                        {hormoneSummaryItems.length > 0 ? (
+                          hormoneSummaryItems.map((item) => (
+                            <span
+                              key={item}
+                              className="rounded-full border border-white/70 bg-white/90 px-2 py-1"
+                            >
+                              {item}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[#94a3b8]">검사항목 미입력</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1177,10 +1279,18 @@ function PageContent() {
                           field.key as keyof HormoneLevels
                         ];
                         const labResult = labKey ? labResults[labKey] : undefined;
+                        const unitCaption = labResult?.unit ?? field.unitCaption;
                         return (
                           <div key={field.key} className="space-y-1">
                             <div className="flex items-center justify-between gap-2">
-                              <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor={`hormone-${field.key}`}>{field.label}</Label>
+                                {unitCaption && (
+                                  <span className="text-[10px] text-[#94a3b8]">
+                                    {unitCaption}
+                                  </span>
+                                )}
+                              </div>
                               {labKey && (
                                 <span
                                   className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -1193,37 +1303,26 @@ function PageContent() {
                             </div>
                           <Input
                             id={`hormone-${field.key}`}
-                            value={hormoneValues[field.key as keyof typeof hormoneValues] ?? ""}
-                            onChange={(event) => {
-                              const nextValue = event.target.value;
-                              setPatientInfo((prev) => ({
+                            value={hormoneInputValues[field.key] ?? ""}
+                            onChange={(event) =>
+                              setHormoneInputValues((prev) => ({
                                 ...prev,
-                                hormoneLevels: {
-                                  ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
-                                    ? prev.hormoneLevels
-                                    : {}),
-                                  [field.key]: nextValue,
-                                },
-                              }));
-                              if (labKey) {
-                                setLabResults((prev) => ({
-                                  ...prev,
-                                  [labKey]: {
-                                    testKey: labKey,
-                                    valueRaw: nextValue,
-                                    valueNumeric: parseLabNumeric(nextValue),
-                                    unit: prev[labKey]?.unit ?? null,
-                                    sourceLine: prev[labKey]?.sourceLine ?? "",
-                                    matchedBy: prev[labKey]?.matchedBy ?? "manual",
-                                  },
-                                }));
-                              }
+                                [field.key]: event.target.value,
+                              }))
+                            }
+                            onBlur={() =>
+                              commitHormoneValue(field.key, hormoneInputValues[field.key] ?? "")
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter") return;
+                              event.preventDefault();
+                              commitHormoneValue(
+                                field.key,
+                                hormoneInputValues[field.key] ?? ""
+                              );
                             }}
                             placeholder="수치 입력"
                           />
-                          {labResult?.unit && (
-                            <p className="text-[11px] text-[#94a3b8]">단위: {labResult.unit}</p>
-                          )}
                           {field.key === "IGF_1" && igf1Insight && (
                             <p className="text-[11px] text-[#64748b]">
                               Roche Elecsys IGF-1 참고치: {igf1Insight.range} ng/mL ·
