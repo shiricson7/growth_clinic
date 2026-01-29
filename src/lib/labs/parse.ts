@@ -18,17 +18,17 @@ const LABEL_MAP: Array<{
   {
     key: "tsh",
     label: "TSH",
-    patterns: [/\bTSH\b/i],
+    patterns: [/\bTSH\b/i, /\bT\s*S\s*H\b/i],
   },
   {
     key: "lh",
     label: "LH",
-    patterns: [/\bLH\b/i],
+    patterns: [/\bLH\b/i, /\bL\s*H\b/i],
   },
   {
     key: "fsh",
     label: "FSH",
-    patterns: [/\bFSH\b/i],
+    patterns: [/\bFSH\b/i, /\bF\s*S\s*H\b/i],
   },
   {
     key: "testosterone",

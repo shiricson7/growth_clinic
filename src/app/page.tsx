@@ -74,6 +74,32 @@ const LAB_HORMONE_TO_KEY: Partial<Record<keyof HormoneLevels, NormalizedTestKey>
   DHEA: "dhea",
 };
 
+const LAB_SUMMARY_META: Record<NormalizedTestKey, { label: string; unit: string }> = {
+  lh: { label: "LH", unit: "mIU/mL" },
+  fsh: { label: "FSH", unit: "mIU/mL" },
+  tsh: { label: "TSH", unit: "uIU/mL" },
+  ft4: { label: "FreeT4", unit: "ng/dL" },
+  testosterone: { label: "Testosterone", unit: "ng/mL" },
+  estradiol: { label: "E2", unit: "ng/mL" },
+  igfbp3: { label: "IGF-BP3", unit: "ng/mL" },
+  igf1: { label: "Somatomedin-C", unit: "ng/mL" },
+  dhea: { label: "DHEA", unit: "ng/mL" },
+  hba1c: { label: "HbA1c", unit: "%" },
+};
+
+const LAB_SUMMARY_ORDER: NormalizedTestKey[] = [
+  "lh",
+  "fsh",
+  "tsh",
+  "ft4",
+  "testosterone",
+  "estradiol",
+  "igfbp3",
+  "igf1",
+  "dhea",
+  "hba1c",
+];
+
 const normalizeHormoneLevels = (value: unknown): Record<string, string> => {
   if (!value) return {};
   if (typeof value === "object") {
@@ -97,6 +123,18 @@ type ChartSuggestion = {
   name: string;
   birthDate: string;
   sex: PatientInfo["sex"];
+};
+
+type BoneAgeRecord = {
+  id: string;
+  measuredAt: string;
+  boneAge: string;
+};
+
+type LabPanelSummary = {
+  id: string;
+  collectedAt: string;
+  results: Record<NormalizedTestKey, ParsedResult>;
 };
 
 function PageContent() {
@@ -129,7 +167,6 @@ function PageContent() {
   const [labResults, setLabResults] = useState<Record<NormalizedTestKey, ParsedResult>>(
     {} as Record<NormalizedTestKey, ParsedResult>
   );
-  const [labCollectedAt, setLabCollectedAt] = useState("");
   const [labMethod, setLabMethod] = useState<"pdf-text" | "ocr" | null>(null);
   const [labRawText, setLabRawText] = useState("");
   const [labImportStatus, setLabImportStatus] = useState("");
@@ -139,6 +176,9 @@ function PageContent() {
   const [boneAgeDateInput, setBoneAgeDateInput] = useState("");
   const [hormoneTestDateInput, setHormoneTestDateInput] = useState("");
   const [hormoneInputValues, setHormoneInputValues] = useState<Record<string, string>>({});
+  const [boneAgeRecords, setBoneAgeRecords] = useState<BoneAgeRecord[]>([]);
+  const [labPanels, setLabPanels] = useState<LabPanelSummary[]>([]);
+  const [boneAgeSaveStatus, setBoneAgeSaveStatus] = useState("");
 
   const hormoneFields = useMemo(
     () => [
@@ -147,7 +187,7 @@ function PageContent() {
       { key: "E2", label: "E2", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
       { key: "Testosterone", label: "Testosterone", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
       { key: "TSH", label: "TSH", unitCaption: "uIU/mL", summaryUnit: "uIU/mL" },
-      { key: "fT4", label: "fT4", unitCaption: "ng/dL", summaryUnit: "ng/dL" },
+      { key: "fT4", label: "FreeT4", unitCaption: "ng/dL", summaryUnit: "ng/dL" },
       { key: "DHEA", label: "DHEA", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
       { key: "IGF_BP3", label: "IGF-BP3", unitCaption: "ng/mL", summaryUnit: "ng/mL" },
       {
@@ -275,10 +315,10 @@ function PageContent() {
   ]);
 
   useEffect(() => {
-    if (patientInfo.hormoneTestDate && !labCollectedAt) {
-      setLabCollectedAt(patientInfo.hormoneTestDate);
-    }
-  }, [patientInfo.hormoneTestDate, labCollectedAt]);
+    if (!hydrated) return;
+    setBoneAgeSaveStatus("");
+    setLabSaveStatus("");
+  }, [hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -461,6 +501,8 @@ function PageContent() {
     setBoneAgeDateInput("");
     setHormoneTestDateInput("");
     setHormoneInputValues({});
+    setBoneAgeRecords([]);
+    setLabPanels([]);
     setShowBoneAge(false);
     setShowHormoneLevels(false);
     clearGrowthStorage();
@@ -495,30 +537,21 @@ function PageContent() {
     results: Record<NormalizedTestKey, ParsedResult>,
     collectedAtValue?: string | null
   ) => {
-    const updates: Partial<HormoneLevels> = {};
+    const updates: Record<string, string> = {};
     Object.entries(results).forEach(([key, result]) => {
       const hormoneKey = LAB_KEY_TO_HORMONE[key as NormalizedTestKey];
       if (!hormoneKey) return;
       updates[hormoneKey] = result.valueRaw;
     });
     if (Object.keys(updates).length > 0) {
-      setPatientInfo((prev) => ({
+      setHormoneInputValues((prev) => ({
         ...prev,
-        hormoneLevels: {
-          ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
-            ? prev.hormoneLevels
-            : {}),
-          ...updates,
-        },
-        hormoneTestDate: collectedAtValue ?? prev.hormoneTestDate ?? "",
-      }));
-    } else if (collectedAtValue) {
-      setPatientInfo((prev) => ({
-        ...prev,
-        hormoneTestDate: collectedAtValue,
+        ...updates,
       }));
     }
-    setHormoneInputValues({});
+    if (collectedAtValue) {
+      setHormoneTestDateInput(collectedAtValue);
+    }
   };
 
   const parseLabNumeric = (raw: string) => {
@@ -526,70 +559,97 @@ function PageContent() {
     return Number.isFinite(numeric) ? numeric : null;
   };
 
-  const commitBoneAge = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    setPatientInfo((prev) => ({
-      ...prev,
-      boneAge: trimmed,
-    }));
-    setBoneAgeInput("");
-  };
-
-  const commitBoneAgeDate = (value: string) => {
-    if (!value) return;
-    setPatientInfo((prev) => ({
-      ...prev,
-      boneAgeDate: value,
-    }));
-    setBoneAgeDateInput("");
-  };
-
-  const commitHormoneTestDate = (value: string) => {
-    if (!value) return;
-    setPatientInfo((prev) => ({
-      ...prev,
-      hormoneTestDate: value,
-    }));
-    setHormoneTestDateInput("");
-  };
-
-  const commitHormoneValue = (key: string, value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      setHormoneInputValues((prev) => ({
-        ...prev,
-        [key]: "",
-      }));
+  const handleSaveBoneAge = async () => {
+    if (!session || !supabase) {
+      setBoneAgeSaveStatus("로그인 후 저장할 수 있어요.");
       return;
     }
+    if (!patientInfo.chartNumber.trim()) {
+      setBoneAgeSaveStatus("차트번호를 입력해주세요.");
+      return;
+    }
+    if (!boneAgeDateInput || !boneAgeInput.trim()) {
+      setBoneAgeSaveStatus("검사일과 골연령을 입력해주세요.");
+      return;
+    }
+    setBoneAgeSaveStatus("저장 중...");
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("chart_number", patientInfo.chartNumber.trim())
+      .single();
+    if (patientError || !patient) {
+      setBoneAgeSaveStatus(patientError?.message ?? "환자 정보를 찾을 수 없습니다.");
+      return;
+    }
+    const payload = {
+      patient_id: patient.id,
+      measured_at: boneAgeDateInput,
+      bone_age: boneAgeInput.trim(),
+    };
+    const { error: upsertError } = await supabase
+      .from("bone_age_records")
+      .upsert(payload, { onConflict: "patient_id,measured_at" });
+
+    if (upsertError?.message?.includes("no unique or exclusion constraint")) {
+      const { error: insertError } = await supabase.from("bone_age_records").insert(payload);
+      if (insertError) {
+        setBoneAgeSaveStatus(insertError.message ?? "골연령 저장에 실패했습니다.");
+        return;
+      }
+    } else if (upsertError) {
+      setBoneAgeSaveStatus(upsertError.message ?? "골연령 저장에 실패했습니다.");
+      return;
+    }
+
     setPatientInfo((prev) => ({
       ...prev,
-      hormoneLevels: {
-        ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
-          ? prev.hormoneLevels
-          : {}),
-        [key]: trimmed,
-      },
+      boneAge: boneAgeInput.trim(),
+      boneAgeDate: boneAgeDateInput,
     }));
-    const labKey = LAB_HORMONE_TO_KEY[key as keyof HormoneLevels];
-    if (labKey) {
-      setLabResults((prev) => ({
-        ...prev,
-        [labKey]: {
-          testKey: labKey,
-          valueRaw: trimmed,
-          valueNumeric: parseLabNumeric(trimmed),
-          unit: prev[labKey]?.unit ?? null,
-          sourceLine: prev[labKey]?.sourceLine ?? "",
-          matchedBy: prev[labKey]?.matchedBy ?? "manual",
-        },
-      }));
-    }
-    setHormoneInputValues((prev) => ({
-      ...prev,
-      [key]: "",
-    }));
+    setBoneAgeRecords((prev) => {
+      const next = [...prev];
+      const existingIndex = next.findIndex(
+        (item) => item.measuredAt === boneAgeDateInput
+      );
+      const record: BoneAgeRecord = {
+        id: existingIndex >= 0 ? next[existingIndex].id : crypto.randomUUID(),
+        measuredAt: boneAgeDateInput,
+        boneAge: boneAgeInput.trim(),
+      };
+      if (existingIndex >= 0) {
+        next[existingIndex] = record;
+      } else {
+        next.unshift(record);
+      }
+      return next;
+    });
+    setBoneAgeInput("");
+    setBoneAgeDateInput("");
+    setBoneAgeSaveStatus("저장 완료!");
+  };
+
+  const buildLabResultsForSave = () => {
+    const results: Record<NormalizedTestKey, ParsedResult> = {} as Record<
+      NormalizedTestKey,
+      ParsedResult
+    >;
+    hormoneFields.forEach((field) => {
+      const value = hormoneInputValues[field.key]?.trim();
+      if (!value) return;
+      const labKey = LAB_HORMONE_TO_KEY[field.key as keyof HormoneLevels];
+      if (!labKey) return;
+      const existing = labResults[labKey];
+      results[labKey] = {
+        testKey: labKey,
+        valueRaw: value,
+        valueNumeric: parseLabNumeric(value),
+        unit: existing?.unit ?? field.unitCaption ?? null,
+        sourceLine: existing?.sourceLine ?? "",
+        matchedBy: existing?.matchedBy ?? "manual",
+      };
+    });
+    return results;
   };
 
   const handleImportLabPdf = async () => {
@@ -620,8 +680,7 @@ function PageContent() {
         method: "pdf-text" | "ocr";
         rawText: string;
       };
-      setLabResults(data.results ?? {});
-      setLabCollectedAt(data.collectedAt ?? "");
+      setLabResults(data.results ?? ({} as Record<NormalizedTestKey, ParsedResult>));
       setLabMethod(data.method ?? null);
       setLabRawText(data.rawText ?? "");
       applyLabResultsToForm(data.results ?? {}, data.collectedAt);
@@ -642,16 +701,17 @@ function PageContent() {
       setLabSaveStatus("차트번호를 입력해주세요.");
       return;
     }
-    if (!labCollectedAt) {
+    if (!hormoneTestDateInput) {
       setLabSaveStatus("검체접수일을 입력해주세요.");
-      return;
-    }
-    if (!labMethod) {
-      setLabSaveStatus("먼저 PDF를 업로드해주세요.");
       return;
     }
     setLabSaveStatus("저장 중...");
     try {
+      const resultsPayload = buildLabResultsForSave();
+      if (Object.keys(resultsPayload).length === 0) {
+        setLabSaveStatus("저장할 검사 수치를 입력해주세요.");
+        return;
+      }
       const response = await fetch("/api/labs/save", {
         method: "POST",
         headers: {
@@ -660,9 +720,9 @@ function PageContent() {
         },
         body: JSON.stringify({
           chartNumber: patientInfo.chartNumber,
-          collectedAt: labCollectedAt,
-          results: labResults,
-          extractionMethod: labMethod,
+          collectedAt: hormoneTestDateInput,
+          results: resultsPayload,
+          extractionMethod: labMethod ?? "pdf-text",
           rawText: saveRawText ? labRawText : null,
         }),
       });
@@ -680,9 +740,122 @@ function PageContent() {
         return;
       }
       setLabSaveStatus("저장 완료!");
+      setPatientInfo((prev) => ({
+        ...prev,
+        hormoneTestDate: hormoneTestDateInput,
+        hormoneLevels: {
+          ...((typeof prev.hormoneLevels === "object" && prev.hormoneLevels)
+            ? prev.hormoneLevels
+            : {}),
+          ...Object.entries(resultsPayload).reduce((acc, [key, result]) => {
+            const hormoneKey = LAB_KEY_TO_HORMONE[key as NormalizedTestKey];
+            if (!hormoneKey) return acc;
+            acc[hormoneKey] = result.valueRaw;
+            return acc;
+          }, {} as Record<keyof HormoneLevels, string>),
+        },
+      }));
+      setLabPanels((prev) => {
+        const next = [...prev];
+        const existingIndex = next.findIndex(
+          (item) => item.collectedAt === hormoneTestDateInput
+        );
+        const summary: LabPanelSummary = {
+          id: existingIndex >= 0 ? next[existingIndex].id : crypto.randomUUID(),
+          collectedAt: hormoneTestDateInput,
+          results: resultsPayload,
+        };
+        if (existingIndex >= 0) {
+          next[existingIndex] = summary;
+        } else {
+          next.unshift(summary);
+        }
+        return next;
+      });
+      setHormoneInputValues({});
+      setHormoneTestDateInput("");
+      setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
+      setLabMethod(null);
+      setLabRawText("");
+      setLabFile(null);
     } catch (error) {
       setLabSaveStatus("저장에 실패했습니다.");
     }
+  };
+
+  const fetchBoneAgeRecords = async (patientId: string) => {
+    if (!supabase || !session) return;
+    const { data, error } = await supabase
+      .from("bone_age_records")
+      .select("id, measured_at, bone_age")
+      .eq("patient_id", patientId)
+      .order("measured_at", { ascending: false });
+    if (error || !data) {
+      setBoneAgeRecords([]);
+      return;
+    }
+    setBoneAgeRecords(
+      data.map((item) => ({
+        id: item.id,
+        measuredAt: item.measured_at,
+        boneAge: item.bone_age ?? "",
+      }))
+    );
+  };
+
+  const fetchLabPanels = async (patientId: string) => {
+    if (!supabase || !session) return;
+    const { data: panels, error: panelError } = await supabase
+      .from("lab_panels")
+      .select("id, collected_at")
+      .eq("patient_id", patientId)
+      .order("collected_at", { ascending: false });
+    if (panelError || !panels) {
+      setLabPanels([]);
+      return;
+    }
+    if (panels.length === 0) {
+      setLabPanels([]);
+      return;
+    }
+    const panelIds = panels.map((panel) => panel.id);
+    const { data: resultsData, error: resultsError } = await supabase
+      .from("lab_results")
+      .select("panel_id, test_key, value_raw, value_numeric, unit, source_line")
+      .in("panel_id", panelIds);
+    if (resultsError || !resultsData) {
+      setLabPanels(
+        panels.map((panel) => ({
+          id: panel.id,
+          collectedAt: panel.collected_at,
+          results: {} as Record<NormalizedTestKey, ParsedResult>,
+        }))
+      );
+      return;
+    }
+
+    const byPanel = new Map<string, Record<NormalizedTestKey, ParsedResult>>();
+    resultsData.forEach((row) => {
+      const key = row.test_key as NormalizedTestKey;
+      const existing = byPanel.get(row.panel_id) ?? ({} as Record<NormalizedTestKey, ParsedResult>);
+      existing[key] = {
+        testKey: key,
+        valueRaw: row.value_raw ?? "",
+        valueNumeric: row.value_numeric ?? null,
+        unit: row.unit ?? null,
+        sourceLine: row.source_line ?? "",
+        matchedBy: "saved",
+      };
+      byPanel.set(row.panel_id, existing);
+    });
+
+    setLabPanels(
+      panels.map((panel) => ({
+        id: panel.id,
+        collectedAt: panel.collected_at,
+        results: byPanel.get(panel.id) ?? ({} as Record<NormalizedTestKey, ParsedResult>),
+      }))
+    );
   };
 
   const handleLoadPatient = async (key: string) => {
@@ -701,13 +874,14 @@ function PageContent() {
       setMeasurements(sortMeasurements(stored.measurements));
       setTherapyCourses(sortTherapies(stored.therapyCourses));
       setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
-      setLabCollectedAt(stored.patientInfo.hormoneTestDate ?? "");
       setLabMethod(null);
       setLabRawText("");
       setBoneAgeInput("");
       setBoneAgeDateInput("");
       setHormoneTestDateInput("");
       setHormoneInputValues({});
+      setBoneAgeRecords([]);
+      setLabPanels([]);
       setLoadStatus("환자 데이터를 불러왔어요.");
       return;
     }
@@ -761,11 +935,11 @@ function PageContent() {
     setHormoneTestDateInput("");
     setHormoneInputValues({});
     setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
-    setLabCollectedAt(patient.hormone_test_date ?? "");
     setLabMethod(null);
     setLabRawText("");
     setMeasurements(sortMeasurements(mappedMeasurements));
     setTherapyCourses([]);
+    await Promise.all([fetchBoneAgeRecords(patient.id), fetchLabPanels(patient.id)]);
     setLoadStatus("환자 데이터를 불러왔어요.");
   };
 
@@ -877,15 +1051,14 @@ function PageContent() {
     patientInfo.sex,
   ]);
 
-  const boneAgeChronological = useMemo(() => {
-    if (!patientInfo.birthDate || !patientInfo.boneAgeDate) return "";
-    const months = getAgeMonths(patientInfo.birthDate, patientInfo.boneAgeDate);
-    if (!Number.isFinite(months) || months < 0) return "";
-    const years = Math.floor(months / 12);
-    const remaining = months % 12;
+  const formatAgeFromMonths = (monthsValue: number) => {
+    if (!Number.isFinite(monthsValue) || monthsValue < 0) return "";
+    const totalMonths = Math.floor(monthsValue);
+    const years = Math.floor(totalMonths / 12);
+    const remaining = totalMonths % 12;
     if (years <= 0) return `${remaining}개월`;
     return remaining === 0 ? `${years}세` : `${years}세 ${remaining}개월`;
-  }, [patientInfo.birthDate, patientInfo.boneAgeDate]);
+  };
 
   const hormoneSummaryItems = useMemo(() => {
     return hormoneFields
@@ -898,6 +1071,59 @@ function PageContent() {
       })
       .filter((item): item is string => Boolean(item));
   }, [hormoneFields, hormoneValues]);
+
+  const boneAgeSummaryRows = useMemo(() => {
+    if (boneAgeRecords.length > 0) return boneAgeRecords;
+    if (patientInfo.boneAgeDate || patientInfo.boneAge) {
+      return [
+        {
+          id: "current",
+          measuredAt: patientInfo.boneAgeDate || "",
+          boneAge: patientInfo.boneAge || "",
+        },
+      ];
+    }
+    return [];
+  }, [boneAgeRecords, patientInfo.boneAge, patientInfo.boneAgeDate]);
+
+  const labPanelSummaryRows = useMemo(() => {
+    if (labPanels.length > 0) return labPanels;
+    if (patientInfo.hormoneTestDate && hormoneSummaryItems.length > 0) {
+      const results = {} as Record<NormalizedTestKey, ParsedResult>;
+      Object.entries(hormoneValues).forEach(([key, value]) => {
+        const trimmed = value?.trim();
+        if (!trimmed) return;
+        const labKey = LAB_HORMONE_TO_KEY[key as keyof HormoneLevels];
+        if (!labKey) return;
+        results[labKey] = {
+          testKey: labKey,
+          valueRaw: trimmed,
+          valueNumeric: parseLabNumeric(trimmed),
+          unit: LAB_SUMMARY_META[labKey]?.unit ?? null,
+          sourceLine: "",
+          matchedBy: "legacy",
+        };
+      });
+      return [
+        {
+          id: "current",
+          collectedAt: patientInfo.hormoneTestDate,
+          results,
+        },
+      ];
+    }
+    return [];
+  }, [hormoneSummaryItems.length, hormoneValues, labPanels, patientInfo.hormoneTestDate]);
+
+  const formatLabItems = (results: Record<NormalizedTestKey, ParsedResult>) => {
+    return LAB_SUMMARY_ORDER.map((key) => {
+      const result = results[key];
+      if (!result?.valueRaw) return null;
+      const meta = LAB_SUMMARY_META[key];
+      const unit = meta?.unit ? ` ${meta.unit}` : "";
+      return `${meta.label} ${result.valueRaw}${unit}`;
+    }).filter((item): item is string => Boolean(item));
+  };
 
   const summaryName = patientInfo.name?.trim() || "아이";
   const heightSummary = latestHeightPercentile !== null
@@ -1153,49 +1379,87 @@ function PageContent() {
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-white/70 bg-white/80 p-3">
                       <p className="text-xs text-[#64748b]">골연령</p>
-                      <div className="mt-1 space-y-1 text-xs text-[#475569]">
-                        <p>
-                          검사일:{" "}
-                          <span className="font-semibold text-[#1a1c24]">
-                            {patientInfo.boneAgeDate || "미입력"}
-                          </span>
-                        </p>
-                        <p>
-                          역연령:{" "}
-                          <span className="font-semibold text-[#1a1c24]">
-                            {boneAgeChronological || "미입력"}
-                          </span>
-                        </p>
-                        <p>
-                          골연령:{" "}
-                          <span className="font-semibold text-[#1a1c24]">
-                            {patientInfo.boneAge?.trim() ? patientInfo.boneAge : "미입력"}
-                          </span>
-                        </p>
-                      </div>
+                      {boneAgeSummaryRows.length > 0 ? (
+                        <div className="mt-2 space-y-2 text-xs text-[#475569]">
+                          {boneAgeSummaryRows.map((record) => {
+                            const chronological = record.measuredAt && patientInfo.birthDate
+                              ? formatAgeFromMonths(
+                                  getAgeMonths(patientInfo.birthDate, record.measuredAt)
+                                )
+                              : "";
+                            return (
+                              <div
+                                key={record.id}
+                                className="rounded-lg border border-white/70 bg-white/90 px-3 py-2"
+                              >
+                                <div className="flex flex-wrap gap-3">
+                                  <span>
+                                    검사일:{" "}
+                                    <strong className="font-semibold text-[#1a1c24]">
+                                      {record.measuredAt || "미입력"}
+                                    </strong>
+                                  </span>
+                                  <span>
+                                    역연령:{" "}
+                                    <strong className="font-semibold text-[#1a1c24]">
+                                      {chronological || "미입력"}
+                                    </strong>
+                                  </span>
+                                  <span>
+                                    골연령:{" "}
+                                    <strong className="font-semibold text-[#1a1c24]">
+                                      {record.boneAge?.trim() ? record.boneAge : "미입력"}
+                                    </strong>
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-[#94a3b8]">골연령 기록이 없습니다.</p>
+                      )}
                     </div>
                     <div className="rounded-xl border border-white/70 bg-white/80 p-3">
                       <p className="text-xs text-[#64748b]">혈액검사</p>
-                      <p className="mt-1 text-xs text-[#475569]">
-                        검사일:{" "}
-                        <span className="font-semibold text-[#1a1c24]">
-                          {patientInfo.hormoneTestDate || "미입력"}
-                        </span>
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#475569]">
-                        {hormoneSummaryItems.length > 0 ? (
-                          hormoneSummaryItems.map((item) => (
-                            <span
-                              key={item}
-                              className="rounded-full border border-white/70 bg-white/90 px-2 py-1"
-                            >
-                              {item}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-[#94a3b8]">검사항목 미입력</span>
-                        )}
-                      </div>
+                      {labPanelSummaryRows.length > 0 ? (
+                        <div className="mt-2 space-y-2 text-xs text-[#475569]">
+                          {labPanelSummaryRows.map((panel) => {
+                            const items = formatLabItems(panel.results);
+                            return (
+                              <div
+                                key={panel.id}
+                                className="rounded-lg border border-white/70 bg-white/90 px-3 py-2"
+                              >
+                                <p>
+                                  검사일:{" "}
+                                  <strong className="font-semibold text-[#1a1c24]">
+                                    {panel.collectedAt || "미입력"}
+                                  </strong>
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {items.length > 0 ? (
+                                    items.map((item) => (
+                                      <span
+                                        key={`${panel.id}-${item}`}
+                                        className="rounded-full border border-white/70 bg-white/90 px-2 py-1"
+                                      >
+                                        {item}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-[#94a3b8]">
+                                      검사항목 미입력
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-[#94a3b8]">혈액검사 기록이 없습니다.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1232,12 +1496,6 @@ function PageContent() {
                       id="boneAge"
                       value={boneAgeInput}
                       onChange={(event) => setBoneAgeInput(event.target.value)}
-                      onBlur={() => commitBoneAge(boneAgeInput)}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        event.preventDefault();
-                        commitBoneAge(boneAgeInput);
-                      }}
                       placeholder="예: 7세 3개월"
                     />
                     <Label htmlFor="boneAgeDate">검사일</Label>
@@ -1246,13 +1504,15 @@ function PageContent() {
                       type="date"
                       value={boneAgeDateInput}
                       onChange={(event) => setBoneAgeDateInput(event.target.value)}
-                      onBlur={() => commitBoneAgeDate(boneAgeDateInput)}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        event.preventDefault();
-                        commitBoneAgeDate(boneAgeDateInput);
-                      }}
                     />
+                    <div className="flex items-center gap-3">
+                      <Button size="sm" onClick={handleSaveBoneAge}>
+                        골연령 저장
+                      </Button>
+                      {boneAgeSaveStatus && (
+                        <span className="text-xs text-[#64748b]">{boneAgeSaveStatus}</span>
+                      )}
+                    </div>
                   </div>
                 )}
                 {showHormoneLevels && (
@@ -1266,12 +1526,6 @@ function PageContent() {
                           type="date"
                           value={hormoneTestDateInput}
                           onChange={(event) => setHormoneTestDateInput(event.target.value)}
-                          onBlur={() => commitHormoneTestDate(hormoneTestDateInput)}
-                          onKeyDown={(event) => {
-                            if (event.key !== "Enter") return;
-                            event.preventDefault();
-                            commitHormoneTestDate(hormoneTestDateInput);
-                          }}
                         />
                       </div>
                       {hormoneFields.map((field) => {
@@ -1310,17 +1564,6 @@ function PageContent() {
                                 [field.key]: event.target.value,
                               }))
                             }
-                            onBlur={() =>
-                              commitHormoneValue(field.key, hormoneInputValues[field.key] ?? "")
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key !== "Enter") return;
-                              event.preventDefault();
-                              commitHormoneValue(
-                                field.key,
-                                hormoneInputValues[field.key] ?? ""
-                              );
-                            }}
                             placeholder="수치 입력"
                           />
                           {field.key === "IGF_1" && igf1Insight && (
@@ -1363,14 +1606,8 @@ function PageContent() {
                           <Input
                             id="labCollectedAt"
                             type="date"
-                            value={labCollectedAt}
-                            onChange={(event) => {
-                              setLabCollectedAt(event.target.value);
-                              setPatientInfo((prev) => ({
-                                ...prev,
-                                hormoneTestDate: event.target.value,
-                              }));
-                            }}
+                            value={hormoneTestDateInput}
+                            onChange={(event) => setHormoneTestDateInput(event.target.value)}
                           />
                         </div>
                         <div className="flex items-end gap-3">
