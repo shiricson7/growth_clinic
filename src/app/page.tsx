@@ -135,6 +135,9 @@ function PageContent() {
   const [labImportStatus, setLabImportStatus] = useState("");
   const [labSaveStatus, setLabSaveStatus] = useState("");
   const [saveRawText, setSaveRawText] = useState(false);
+  const [boneAgeInput, setBoneAgeInput] = useState("");
+  const [boneAgeDateInput, setBoneAgeDateInput] = useState("");
+  const [hormoneTestDateInput, setHormoneTestDateInput] = useState("");
 
   const hormoneFields = useMemo(
     () => [
@@ -447,6 +450,9 @@ function PageContent() {
       hormoneLevels: {},
       hormoneTestDate: "",
     });
+    setBoneAgeInput("");
+    setBoneAgeDateInput("");
+    setHormoneTestDateInput("");
     setShowBoneAge(false);
     setShowHormoneLevels(false);
     clearGrowthStorage();
@@ -509,6 +515,34 @@ function PageContent() {
   const parseLabNumeric = (raw: string) => {
     const numeric = Number(raw.replace(/[<>≤≥＜＞]/g, "").trim());
     return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const commitBoneAge = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setPatientInfo((prev) => ({
+      ...prev,
+      boneAge: trimmed,
+    }));
+    setBoneAgeInput("");
+  };
+
+  const commitBoneAgeDate = (value: string) => {
+    if (!value) return;
+    setPatientInfo((prev) => ({
+      ...prev,
+      boneAgeDate: value,
+    }));
+    setBoneAgeDateInput("");
+  };
+
+  const commitHormoneTestDate = (value: string) => {
+    if (!value) return;
+    setPatientInfo((prev) => ({
+      ...prev,
+      hormoneTestDate: value,
+    }));
+    setHormoneTestDateInput("");
   };
 
   const handleImportLabPdf = async () => {
@@ -623,6 +657,9 @@ function PageContent() {
       setLabCollectedAt(stored.patientInfo.hormoneTestDate ?? "");
       setLabMethod(null);
       setLabRawText("");
+      setBoneAgeInput("");
+      setBoneAgeDateInput("");
+      setHormoneTestDateInput("");
       setLoadStatus("환자 데이터를 불러왔어요.");
       return;
     }
@@ -671,6 +708,9 @@ function PageContent() {
       hormoneLevels: normalizeHormoneLevels(patient.hormone_levels),
       hormoneTestDate: patient.hormone_test_date ?? "",
     });
+    setBoneAgeInput("");
+    setBoneAgeDateInput("");
+    setHormoneTestDateInput("");
     setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
     setLabCollectedAt(patient.hormone_test_date ?? "");
     setLabMethod(null);
@@ -1037,6 +1077,26 @@ function PageContent() {
                     <Input id="age" value={ageLabel} readOnly placeholder="자동완성" />
                   </div>
                 </div>
+                <div className="mt-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-[#1a1c24]">검사 요약</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-white/70 bg-white/80 p-3">
+                      <p className="text-xs text-[#64748b]">골연령</p>
+                      <p className="mt-1 text-sm font-semibold text-[#1a1c24]">
+                        {patientInfo.boneAge?.trim() ? patientInfo.boneAge : "미입력"}
+                      </p>
+                      <p className="mt-1 text-xs text-[#94a3b8]">
+                        검사일: {patientInfo.boneAgeDate || "-"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/70 bg-white/80 p-3">
+                      <p className="text-xs text-[#64748b]">혈액검사 일자</p>
+                      <p className="mt-1 text-sm font-semibold text-[#1a1c24]">
+                        {patientInfo.hormoneTestDate || "미입력"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#475569]">
                   <label className="flex items-center gap-2">
                     <input
@@ -1068,26 +1128,28 @@ function PageContent() {
                     <Label htmlFor="boneAge">골연령</Label>
                     <Input
                       id="boneAge"
-                      value={patientInfo.boneAge ?? ""}
-                      onChange={(event) =>
-                        setPatientInfo((prev) => ({
-                          ...prev,
-                          boneAge: event.target.value,
-                        }))
-                      }
+                      value={boneAgeInput}
+                      onChange={(event) => setBoneAgeInput(event.target.value)}
+                      onBlur={() => commitBoneAge(boneAgeInput)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        commitBoneAge(boneAgeInput);
+                      }}
                       placeholder="예: 7세 3개월"
                     />
                     <Label htmlFor="boneAgeDate">검사일</Label>
                     <Input
                       id="boneAgeDate"
                       type="date"
-                      value={patientInfo.boneAgeDate ?? ""}
-                      onChange={(event) =>
-                        setPatientInfo((prev) => ({
-                          ...prev,
-                          boneAgeDate: event.target.value,
-                        }))
-                      }
+                      value={boneAgeDateInput}
+                      onChange={(event) => setBoneAgeDateInput(event.target.value)}
+                      onBlur={() => commitBoneAgeDate(boneAgeDateInput)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        commitBoneAgeDate(boneAgeDateInput);
+                      }}
                     />
                   </div>
                 )}
@@ -1100,13 +1162,14 @@ function PageContent() {
                         <Input
                           id="hormoneTestDate"
                           type="date"
-                          value={patientInfo.hormoneTestDate ?? ""}
-                          onChange={(event) =>
-                            setPatientInfo((prev) => ({
-                              ...prev,
-                              hormoneTestDate: event.target.value,
-                            }))
-                          }
+                          value={hormoneTestDateInput}
+                          onChange={(event) => setHormoneTestDateInput(event.target.value)}
+                          onBlur={() => commitHormoneTestDate(hormoneTestDateInput)}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            commitHormoneTestDate(hormoneTestDateInput);
+                          }}
                         />
                       </div>
                       {hormoneFields.map((field) => {
