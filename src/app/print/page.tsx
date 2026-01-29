@@ -2,18 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { differenceInMonths, format, parseISO } from "date-fns";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { addMonths, differenceInMonths, format, parseISO } from "date-fns";
 import type { Measurement, TherapyCourse, PatientInfo } from "@/lib/types";
 import { loadMeasurements, loadTherapyCourses, loadPatientInfo } from "@/lib/storage";
 import { getAgeMonths, percentileFromValue } from "@/lib/percentileLogic";
+import ParentSnapshotGrowthCard from "@/components/ParentSnapshotGrowthCard";
 import logo from "../../../data/growth_clinic_logo.png";
 
 type SummaryResponse = {
@@ -173,23 +166,75 @@ export default function PrintPage() {
 
   const payloadKey = useMemo(() => JSON.stringify(payload), [payload]);
 
-  const chartData = useMemo(
-    () =>
-      sortedMeasurements.map((item) => ({
-        date: item.date,
-        height: item.heightCm ?? null,
-        weight: item.weightKg ?? null,
-      })),
-    [sortedMeasurements]
-  );
+  const snapshotMetric = useMemo(() => {
+    if (sortedMeasurements.some((item) => typeof item.heightCm === "number")) return "height";
+    if (sortedMeasurements.some((item) => typeof item.weightKg === "number")) return "weight";
+    return "height";
+  }, [sortedMeasurements]);
 
-  const hasHeight = useMemo(
-    () => sortedMeasurements.some((item) => typeof item.heightCm === "number"),
-    [sortedMeasurements]
-  );
-  const hasWeight = useMemo(
-    () => sortedMeasurements.some((item) => typeof item.weightKg === "number"),
-    [sortedMeasurements]
+  const snapshotUnit = snapshotMetric === "height" ? "cm" : "kg";
+
+  const snapshotObserved = useMemo(() => {
+    const points = sortedMeasurements
+      .filter((item) =>
+        snapshotMetric === "height"
+          ? typeof item.heightCm === "number"
+          : typeof item.weightKg === "number"
+      )
+      .map((item) => ({
+        date: item.date,
+        value:
+          snapshotMetric === "height"
+            ? (item.heightCm as number)
+            : (item.weightKg as number),
+      }));
+    if (!latestMeasurement?.date) return points.slice(-12);
+    const windowStart = addMonths(parseISO(latestMeasurement.date), -11);
+    const inWindow = points.filter((item) => parseISO(item.date) >= windowStart);
+    return inWindow.length > 0 ? inWindow : points.slice(-12);
+  }, [latestMeasurement?.date, snapshotMetric, sortedMeasurements]);
+
+  const snapshotTrend = useMemo(() => {
+    if (snapshotObserved.length < 2) return "flat" as const;
+    const last = snapshotObserved[snapshotObserved.length - 1].value;
+    const prev = snapshotObserved[Math.max(0, snapshotObserved.length - 3)].value;
+    const delta = last - prev;
+    const threshold = snapshotMetric === "height" ? 0.4 : 0.2;
+    if (delta > threshold) return "up" as const;
+    if (delta < -threshold) return "down" as const;
+    return "flat" as const;
+  }, [snapshotMetric, snapshotObserved]);
+
+  const snapshotVelocity = useMemo(() => {
+    if (snapshotObserved.length < 2) return 0;
+    const first = snapshotObserved[0];
+    const last = snapshotObserved[snapshotObserved.length - 1];
+    const months = differenceInMonths(parseISO(last.date), parseISO(first.date));
+    if (!Number.isFinite(months) || months <= 0) return 0;
+    const yearly = ((last.value - first.value) / months) * 12;
+    return Number(yearly.toFixed(1));
+  }, [snapshotObserved]);
+
+  const snapshotPercentile = snapshotMetric === "height" ? latestHeightPercentile : latestWeightPercentile;
+
+  const snapshotCurrentValue = snapshotObserved.length
+    ? snapshotObserved[snapshotObserved.length - 1].value
+    : 0;
+
+  const snapshotUpdatedAt =
+    latestMeasurement?.date ?? format(new Date(), "yyyy-MM-dd");
+
+  const snapshotTreatments = useMemo(
+    () =>
+      therapyCourses.map((course) => ({
+        id: course.id,
+        type: course.drug === "GH" ? "GH" : "GnRH",
+        label: course.drug,
+        startDate: course.startDate,
+        endDate: course.endDate ?? null,
+        note: course.note,
+      })),
+    [therapyCourses]
   );
 
   useEffect(() => {
@@ -384,64 +429,26 @@ export default function PrintPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-[#94a3b8]">성장 차트</p>
-                <span className="text-[11px] text-[#94a3b8]">
-                  {sortedMeasurements.length}건
-                </span>
-              </div>
-              <div className="mt-2 h-[220px] w-full">
-                {sortedMeasurements.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-xs text-[#94a3b8]">
-                    차트를 표시할 기록이 없습니다.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 8, right: 12, left: -6, bottom: 0 }}>
-                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
-                      <XAxis
-                        dataKey="date"
-                        tick={{ fontSize: 10, fill: "#94a3b8" }}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) =>
-                          format(new Date(String(value)), "MM.dd")
-                        }
-                        minTickGap={14}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: "#94a3b8" }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={32}
-                        domain={["dataMin - 2", "dataMax + 2"]}
-                      />
-                      {hasHeight && (
-                        <Line
-                          type="monotone"
-                          dataKey="height"
-                          stroke="#6366f1"
-                          strokeWidth={2}
-                          dot={false}
-                          connectNulls
-                        />
-                      )}
-                      {hasWeight && (
-                        <Line
-                          type="monotone"
-                          dataKey="weight"
-                          stroke="#f97316"
-                          strokeWidth={2}
-                          dot={false}
-                          connectNulls
-                        />
-                      )}
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
+            <ParentSnapshotGrowthCard
+              title="Growth Summary (Last 12 months)"
+              metric={snapshotMetric}
+              unit={snapshotUnit}
+              mode="report"
+              updatedAt={snapshotUpdatedAt}
+              data={{
+                observed: snapshotObserved,
+                current: {
+                  value: snapshotCurrentValue,
+                  percentile: snapshotPercentile ? Math.round(snapshotPercentile) : 0,
+                  trend: snapshotTrend,
+                },
+                velocity: {
+                  value: snapshotVelocity,
+                  unit: snapshotMetric === "height" ? "cm/yr" : "kg/yr",
+                },
+              }}
+              treatments={snapshotTreatments}
+            />
           </section>
         </section>
 

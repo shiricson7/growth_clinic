@@ -707,6 +707,16 @@ function PageContent() {
     }
     setLabSaveStatus("저장 중...");
     try {
+      const { data: patient, error: patientError } = await supabase
+        .from("patients")
+        .select("id")
+        .eq("chart_number", patientInfo.chartNumber.trim())
+        .single();
+      if (patientError || !patient) {
+        setLabSaveStatus(patientError?.message ?? "환자 정보를 찾을 수 없습니다.");
+        return;
+      }
+
       const resultsPayload = buildLabResultsForSave();
       if (Object.keys(resultsPayload).length === 0) {
         setLabSaveStatus("저장할 검사 수치를 입력해주세요.");
@@ -755,23 +765,7 @@ function PageContent() {
           }, {} as Record<keyof HormoneLevels, string>),
         },
       }));
-      setLabPanels((prev) => {
-        const next = [...prev];
-        const existingIndex = next.findIndex(
-          (item) => item.collectedAt === hormoneTestDateInput
-        );
-        const summary: LabPanelSummary = {
-          id: existingIndex >= 0 ? next[existingIndex].id : crypto.randomUUID(),
-          collectedAt: hormoneTestDateInput,
-          results: resultsPayload,
-        };
-        if (existingIndex >= 0) {
-          next[existingIndex] = summary;
-        } else {
-          next.unshift(summary);
-        }
-        return next;
-      });
+      await fetchLabPanels(patient.id);
       setHormoneInputValues({});
       setHormoneTestDateInput("");
       setLabResults({} as Record<NormalizedTestKey, ParsedResult>);
@@ -1021,8 +1015,20 @@ function PageContent() {
       ? {}
       : (patientInfo.hormoneLevels ?? {});
 
+  const mergedHormoneValues = useMemo(() => {
+    return {
+      ...hormoneValues,
+      ...Object.entries(hormoneInputValues).reduce((acc, [key, value]) => {
+        if (value?.trim()) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as Record<string, string>),
+    };
+  }, [hormoneInputValues, hormoneValues]);
+
   const igf1Insight = useMemo(() => {
-    const raw = hormoneValues.IGF_1?.trim();
+    const raw = mergedHormoneValues.IGF_1?.trim();
     if (!raw) return null;
     const value = Number(raw);
     if (!Number.isFinite(value)) return null;
@@ -1044,7 +1050,7 @@ function PageContent() {
       referenceDate,
     };
   }, [
-    hormoneValues.IGF_1,
+    mergedHormoneValues.IGF_1,
     latestMeasurement?.date,
     patientInfo.birthDate,
     patientInfo.hormoneTestDate,
