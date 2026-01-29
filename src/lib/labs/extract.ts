@@ -52,7 +52,7 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<TextExtraction
   if (text.length >= MIN_TEXT_LENGTH) {
     const pages = rawText
       .split(/\f/)
-      .map((page) => page.trim())
+      .map((page: string) => page.trim())
       .filter(Boolean);
     return {
       pages: pages.length ? pages : [text],
