@@ -132,18 +132,43 @@ export function useLabData(
             return;
         }
         setBoneAgeSaveStatus("저장 중...");
-        const { data: patient, error: patientError } = await supabase
+        let patientId = "";
+
+        // 1. Try to find patient
+        const { data: existingPatient } = await supabase
             .from("patients")
-            .select("id, created_at")
+            .select("id")
             .eq("chart_number", patientInfo.chartNumber.trim())
-            .order("created_at", { ascending: false })
-            .limit(1)
             .maybeSingle();
 
-        if (patientError || !patient) {
-            setBoneAgeSaveStatus(patientError?.message ?? "환자 정보를 찾을 수 없습니다.");
-            return;
+        if (existingPatient) {
+            patientId = existingPatient.id;
+        } else {
+            // 2. Create if not found
+            if (!patientInfo.name || !patientInfo.birthDate) {
+                setBoneAgeSaveStatus("신규 환자입니다. 이름과 생년월일을 입력해주세요.");
+                return;
+            }
+
+            const { data: newUser, error: createError } = await supabase
+                .from("patients")
+                .insert({
+                    chart_number: patientInfo.chartNumber.trim(),
+                    name: patientInfo.name,
+                    birth_date: patientInfo.birthDate,
+                    sex: patientInfo.sex,
+                })
+                .select("id")
+                .single();
+
+            if (createError || !newUser) {
+                setBoneAgeSaveStatus("환자 생성 실패: " + createError?.message);
+                return;
+            }
+            patientId = newUser.id;
         }
+
+        const patient = { id: patientId }; // Compat with existing code usage if any, mostly used for ID
         const payload = {
             patient_id: patient.id,
             measured_at: boneAgeDateInput,
@@ -162,6 +187,20 @@ export function useLabData(
         } else if (upsertError) {
             setBoneAgeSaveStatus(upsertError.message ?? "골연령 저장에 실패했습니다.");
             return;
+        }
+
+        // Update Patient's latest bone age
+        const { error: updatePatientError } = await supabase
+            .from("patients")
+            .update({
+                bone_age: boneAgeInput.trim(),
+                bone_age_date: boneAgeDateInput
+            })
+            .eq("id", patientId);
+
+        if (updatePatientError) {
+            console.error("Failed to update patient bone age summary", updatePatientError);
+            // We don't block success message for this, but good to know
         }
 
         setPatientInfo((prev) => ({
