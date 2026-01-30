@@ -6,7 +6,7 @@ import GrowthPercentileChart, {
   type GrowthObservedPoint,
   type GrowthPercentilePoint,
   type GrowthTreatment,
-} from "@/components/GrowthPercentileChart";
+} from "@/components/dashboard/GrowthPercentileChart";
 
 const buildDates = (start: string, count: number) =>
   Array.from({ length: count }, (_, index) =>
