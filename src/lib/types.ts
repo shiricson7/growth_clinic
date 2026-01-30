@@ -1,8 +1,18 @@
+import { NormalizedTestKey, ParsedResult } from "./labs/types";
+export type { NormalizedTestKey, ParsedResult };
+
 export type Measurement = {
   id: string;
   date: string; // ISO yyyy-MM-dd
   heightCm?: number;
   weightKg?: number;
+  // Computed fields (optional)
+  zHeight?: number | null;
+  zWeight?: number | null;
+  zBmi?: number | null;
+  percentileHeight?: number | null;
+  percentileWeight?: number | null;
+  percentileBmi?: number | null;
 };
 
 export type TherapyCourse = {
@@ -38,4 +48,23 @@ export type PatientInfo = {
   boneAgeDate?: string;
   hormoneLevels?: HormoneLevels | string;
   hormoneTestDate?: string;
+};
+
+export type ChartSuggestion = {
+  chartNumber: string;
+  name: string;
+  birthDate: string;
+  sex: PatientInfo["sex"];
+};
+
+export type BoneAgeRecord = {
+  id: string;
+  measuredAt: string;
+  boneAge: string;
+};
+
+export type LabPanelSummary = {
+  id: string;
+  collectedAt: string;
+  results: Record<NormalizedTestKey, ParsedResult>;
 };

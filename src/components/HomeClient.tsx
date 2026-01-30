@@ -479,14 +479,28 @@ export default function HomeClient() {
         Boolean(childInfo.measurementDate) && isValidIsoDate(childInfo.measurementDate);
 
       if (measurementDateValid && hasMeasurementValues) {
-        const { error: measurementError } = await supabase
+        const measurementPayload: {
+          patient_id: string;
+          measurement_date: string;
+          height_cm?: number | null;
+          weight_kg?: number | null;
+        } = {
+          patient_id: patient.id,
+          measurement_date: childInfo.measurementDate,
+        };
+
+        if (childInfo.heightCm) {
+          measurementPayload.height_cm = Number(childInfo.heightCm);
+        }
+        if (childInfo.weightKg) {
+          measurementPayload.weight_kg = Number(childInfo.weightKg);
+        }
+
+        const { data: savedMeasurement, error: measurementError } = await supabase
           .from("measurements")
-          .insert({
-            patient_id: patient.id,
-            measurement_date: childInfo.measurementDate,
-            height_cm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
-            weight_kg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
-          });
+          .upsert(measurementPayload, { onConflict: "patient_id,measurement_date" })
+          .select("measurement_date, height_cm, weight_kg")
+          .single();
 
         if (measurementError) {
           setSaveStatus(measurementError.message ?? "??? ??? ?????.");
@@ -495,9 +509,19 @@ export default function HomeClient() {
 
         setHistory((prev) => {
           const entry = {
-            measurementDate: childInfo.measurementDate,
-            heightCm: childInfo.heightCm ? Number(childInfo.heightCm) : null,
-            weightKg: childInfo.weightKg ? Number(childInfo.weightKg) : null,
+            measurementDate: savedMeasurement?.measurement_date ?? childInfo.measurementDate,
+            heightCm:
+              typeof savedMeasurement?.height_cm === "number"
+                ? savedMeasurement.height_cm
+                : childInfo.heightCm
+                ? Number(childInfo.heightCm)
+                : null,
+            weightKg:
+              typeof savedMeasurement?.weight_kg === "number"
+                ? savedMeasurement.weight_kg
+                : childInfo.weightKg
+                ? Number(childInfo.weightKg)
+                : null,
           };
           const filtered = prev.filter((item) => item.measurementDate !== entry.measurementDate);
           return [entry, ...filtered].sort((a, b) =>
@@ -506,8 +530,12 @@ export default function HomeClient() {
         });
 
         setSaveStatus("?? ??! (RRN? ???? ???)");
-        setHeightLocked(Boolean(childInfo.heightCm));
-        setWeightLocked(Boolean(childInfo.weightKg));
+        setHeightLocked(
+          typeof savedMeasurement?.height_cm === "number" || Boolean(childInfo.heightCm)
+        );
+        setWeightLocked(
+          typeof savedMeasurement?.weight_kg === "number" || Boolean(childInfo.weightKg)
+        );
       } else {
         setSaveStatus(
           "?? ?? ?? ??! ???/?/???? ?? ?? ??? ???? ????."

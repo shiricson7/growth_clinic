@@ -108,27 +108,40 @@ if (boneAgeDate && !isValidDate(boneAgeDate)) {
 
     let measurement = null;
     if (measurementDate) {
-      const measurementPayload = {
-        patient_id: patient.id,
-        measurement_date: measurementDate,
-        height_cm: heightCm !== undefined && heightCm !== null && heightCm !== "" ? Number(heightCm) : null,
-        weight_kg: weightKg !== undefined && weightKg !== null && weightKg !== "" ? Number(weightKg) : null,
-      };
+      const hasHeight = heightCm !== undefined && heightCm !== null && heightCm !== "";
+      const hasWeight = weightKg !== undefined && weightKg !== null && weightKg !== "";
+      if (hasHeight || hasWeight) {
+        const measurementPayload: {
+          patient_id: string;
+          measurement_date: string;
+          height_cm?: number | null;
+          weight_kg?: number | null;
+        } = {
+          patient_id: patient.id,
+          measurement_date: measurementDate,
+        };
+        if (hasHeight) {
+          measurementPayload.height_cm = Number(heightCm);
+        }
+        if (hasWeight) {
+          measurementPayload.weight_kg = Number(weightKg);
+        }
 
-      const { data: savedMeasurement, error: measurementError } = await supabase
-        .from("measurements")
-        .insert(measurementPayload)
-        .select("*")
-        .single();
+        const { data: savedMeasurement, error: measurementError } = await supabase
+          .from("measurements")
+          .upsert(measurementPayload, { onConflict: "patient_id,measurement_date" })
+          .select("measurement_date, height_cm, weight_kg")
+          .single();
 
-      if (measurementError) {
-        return NextResponse.json(
-          { error: measurementError.message ?? "??? ??? ??????." },
-          { status: 500 }
-        );
+        if (measurementError) {
+          return NextResponse.json(
+            { error: measurementError.message ?? "??? ??? ??????." },
+            { status: 500 }
+          );
+        }
+
+        measurement = savedMeasurement;
       }
-
-      measurement = savedMeasurement;
     }
 
     return NextResponse.json({ patientId: patient.id, measurement });

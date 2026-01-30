@@ -194,7 +194,7 @@ export default function MeasurementsPanel({
         .join(" · ");
       setCsvStatus(`CSV 업로드 완료! ${summary}`);
       setCsvFile(null);
-    } catch (error) {
+    } catch {
       setCsvStatus("CSV 파일을 읽을 수 없습니다.");
     }
   };
