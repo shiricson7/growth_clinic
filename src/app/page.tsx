@@ -575,9 +575,11 @@ function PageContent() {
     setBoneAgeSaveStatus("저장 중...");
     const { data: patient, error: patientError } = await supabase
       .from("patients")
-      .select("id")
+      .select("id, created_at")
       .eq("chart_number", patientInfo.chartNumber.trim())
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (patientError || !patient) {
       setBoneAgeSaveStatus(patientError?.message ?? "환자 정보를 찾을 수 없습니다.");
       return;
@@ -707,11 +709,13 @@ function PageContent() {
     }
     setLabSaveStatus("저장 중...");
     try {
-      const { data: patient, error: patientError } = await supabase
-        .from("patients")
-        .select("id")
-        .eq("chart_number", patientInfo.chartNumber.trim())
-        .single();
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id, created_at")
+      .eq("chart_number", patientInfo.chartNumber.trim())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
       if (patientError || !patient) {
         setLabSaveStatus(patientError?.message ?? "환자 정보를 찾을 수 없습니다.");
         return;
